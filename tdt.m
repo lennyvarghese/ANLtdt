@@ -33,7 +33,7 @@ classdef tdt
 % play
 % stop
 %
-% last updated 2015-01-31, LAV, lennyv_at_bu_dot_edu
+% last updated 2015-02-11, LAV, lennyv_at_bu_dot_edu
 
     properties
         RP
@@ -42,6 +42,7 @@ classdef tdt
         maxBufferSize
         channel1Scale
         channel2Scale
+        status
     end
 
     methods
@@ -98,6 +99,9 @@ classdef tdt
                  obj.channel2Scale, obj.channel2Scale);
 
             obj.maxBufferSize = 4.185E6;
+
+            currentSample = obj.get_current_sample();
+            obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
 
         function prepare_stimulus(obj, audioData, triggerInfo)
@@ -163,7 +167,7 @@ classdef tdt
                 triggerVals = int32(triggerInfo(:, 2));
                 triggerDurations = single(triggerInfo(:,3));
             else
-                triggerIdx = int32(0);
+                triggerIdx = int32(1);
                 triggerVals = int32(0);
                 triggerDurations = single(0);
             end
@@ -192,15 +196,9 @@ classdef tdt
             % write data to TDT %
             %%%%%%%%%%%%%%%%%%%%%
             
-            obj.RP.ZeroTag('audioDataL')
-            obj.RP.ZeroTag('audioDataR')
-            obj.RP.ZeroTag('triggerIdx')
-            obj.RP.ZeroTag('triggerVals')
-            obj.RP.ZeroTag('triggerDurations')
-            %obj.RP.ZeroTag('stopSample')
             
             % reset buffer indexing:
-            obj.RP.SoftTrg(3)
+            obj.reset_buffers()
             
             status = obj.RP.WriteTagVEX('audioDataL', 0, 'F32',...
                                         audioData(1,:));
@@ -232,27 +230,62 @@ classdef tdt
                 error('Error writing to triggerDurations buffer')
             end
             
-            %status = obj.RP.SetTagVal('stopSample');
-            %if ~status
-            %    error('Error writing to triggerVals buffer')
-            %end
+            status = obj.RP.SetTagVal('stopSample');
+            if ~status
+                error('Error writing to stopSample tag')
+            end
             
             disp('Stimulus loaded.')
         end
 
         function play(obj)
             obj.RP.SoftTrg(1);
+            obj.status = 'playing';
         end
 
-        function play_blocking(obj)
-            obj.RP.SoftTrg(1)
+        function stop(obj)
+            obj.RP.SoftTrg(2);
+            pause(0.01);
+            currentSample = obj.get_current_sample();
+            obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
         
-        function currentSample = stop(obj)
-            obj.RP.SoftTrg(2);
-            pause(0.1);
-            currentSample = obj.get_current_sample();
+        function rewind(obj)
+            obj.reset_buffers(false)
         end
+        
+        function reset(obj)
+            obj.reset_buffers(true)
+        end
+
+        function reset_buffers(obj, clearBuffer)
+            obj.RP.SoftTrg(2);
+            pause(0.01);
+
+            if clearBuffer
+                obj.RP.ZeroTag('audioDataL');
+                obj.RP.ZeroTag('audioDataR');
+                obj.RP.ZeroTag('triggerIdx');
+                obj.RP.ZeroTag('triggerVals');
+                obj.RP.ZeroTag('triggerDurations');
+                obj.RP.ZeroTag('stopSample');
+            end
+
+            obj.RP.SoftTrg(3);
+            pause(0.01);
+            currentSample = obj.get_current_sample();
+            if currentSample ~= 0
+                error('buffer rewind error')
+            end
+            obj.status = sprintf('stopped at buffer index %d', currentSample);
+        end
+
+        function close(obj)
+            obj.reset_buffers(true)
+            obj.RP.ClearCOF;
+            close(obj.f1);
+        end
+            
 
         function currentSample = get_current_sample(obj)
             currentSample = obj.RP.GetTagVal('chan1BufIdx');
