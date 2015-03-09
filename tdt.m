@@ -1,5 +1,5 @@
-classdef tdt
-% tdtObject = tdt([channel1Scale, channel2Scale], figNum=99999)
+classdef tdt < handle
+% tdtObject = tdt([channel1Scale, channel2Scale], bgNoise, noiseAmp, figNum=99999)
 %
 % creates a new tdt object, with max/min ouptut voltage specified
 % by default, creates the ActiveX figure as figure number 99999;
@@ -41,22 +41,66 @@ classdef tdt
         maxBufferSize
         channel1Scale
         channel2Scale
+        noise1RMS
+        noise2RMS
+        noise1Seed
+        noise2Seed
         status
     end
 
     methods
-        function obj = tdt(scaling, figNum)
+        function obj = tdt(scaling, bgNoise, noiseAmpDB, figNum)
             
-            if nargin < 1 || numel(scaling) ~= 2 
+            % input checks
+            if nargin < 1 
                 error('Scaling factors must be specified for each channel')
             end
 
-            if nargin < 2 
-                figNum = 99999;
+            if length(scaling) < 2
+                scaling(2) = scaling(1);
+            end
+
+            % control the background noise type
+            if nargin < 2
+               bgNoise = 'none';
             end
             
-            % Start ActiveX controls and hides the figure at the start of each
-            % block
+            if ~(strcmpi(bgNoise, 'none') || ...
+                 strcmpi(bgNoise, 'diotic') || ...
+                 strcmpi(bgNoise, 'dichotic'))
+                error('bgNoise should be none/diotic/dichotic')
+            end
+            
+            if ~strcmpi(bgNoise, 'none')
+                seedNum1 = randi(2^15);
+            else
+                seedNum1 = 0;
+            end
+            
+            if strcmpi(bgNoise, 'dichotic') % two different random seeds
+                seedNum2 = randi(2^15);
+            else
+                seedNum2 = seedNum1; % use same random seed for diotic/none
+            end
+            
+            % control the background noise amplitude (dbFS)
+            if nargin < 3
+                noiseAmpDB = [-1000, -1000];
+            end
+            
+            if length(noiseAmpDB) < 2
+                noiseAmpDB(2) = noiseAmpDB(1);
+            end
+            
+            noiseAmp = 10.^(noiseAmpDB ./ 20) .* scaling;
+
+            if nargin < 4 
+                figNum = 99999;
+            end
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            
+            % Start ActiveX controls and hides the figure at the start of
+            % each block
             obj.f1 = figure(figNum);
             set(obj.f1,'Position', [5 5 30 30], 'Visible', 'off');
             obj.RP = actxcontrol('RPco.x', [5 5 30 30], obj.f1);
@@ -77,6 +121,18 @@ classdef tdt
                 error('TDT connection error. Try rebooting the TDT.');
             end
             
+            % store some relevant info in the object itself
+            obj.channel1Scale = single(scaling(1));
+            obj.channel2Scale = single(scaling(2));
+            
+            obj.noise1RMS = single(noiseAmp(1));
+            obj.noise2RMS = single(noiseAmp(2));
+            
+            obj.noise1Seed = single(seedNum1);
+            obj.noise2Seed = single(seedNum2);
+            
+            obj.sampleRate = obj.RP.GetSFreq();
+            
             % zero tag the buffer
             obj.RP.ZeroTag('audioChannel1');
             obj.RP.ZeroTag('audioChannel2');
@@ -85,13 +141,12 @@ classdef tdt
             obj.RP.ZeroTag('triggerDurations')
             obj.RP.ZeroTag('stopSample')
             
-            obj.channel1Scale = single(scaling(1));
-            obj.channel2Scale = single(scaling(2));
-            
-            obj.sampleRate = obj.RP.GetSFreq();
- 
             obj.RP.SetTagVal('chan1Scaler', obj.channel1Scale);
             obj.RP.SetTagVal('chan2Scaler', obj.channel2Scale);
+            obj.RP.SetTagVal('chan1NoiseAmp', obj.noise1RMS);
+            obj.RP.SetTagVal('chan2NoiseAmp', obj.noise2RMS);
+            obj.RP.SetTagVal('chan1NoiseSeed', obj.noise1Seed);
+            obj.RP.SetTagVal('chan2NoiseSeed', obj.noise2Seed);
             
             fprintf('Channel 1, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel1Scale, obj.channel1Scale);
@@ -101,7 +156,8 @@ classdef tdt
             obj.maxBufferSize = 4.185E6;
 
             currentSample = obj.get_current_sample();
-            obj.status = sprintf('stopped at buffer index %d', currentSample);
+            obj.status = sprintf('stopped at buffer index %d', ...
+                                 currentSample);
         end
 
         function prepare_stimulus(obj, audioData, triggerInfo)
@@ -193,11 +249,7 @@ classdef tdt
             if any(abs(audioData) > 1)
                 error('All audio data must be scaled between -1.0 and 1.0')
             end
-            
-            % 245 is 5 ms at 48828.125 Hz sample rate
-            stopSample = size(audioData,2) - 245;
-            
-            
+
             %%%%%%%%%%%%%%%%%%%%%
             % write data to TDT %
             %%%%%%%%%%%%%%%%%%%%%
@@ -206,38 +258,38 @@ classdef tdt
             % reset buffer indexing:
             obj.reset_buffers()
             
-            status = obj.RP.WriteTagVEX('audioDataL', 0, 'F32',...
+            curStatus = obj.RP.WriteTagVEX('audioDataL', 0, 'F32',...
                                         audioData(:, 1));
-            if ~status
+            if ~curStatus
                 error('Error writing to audioDataL buffer')
             end
             
-            status = obj.RP.WriteTagVEX('audioDataR', 0, 'F32',...
+            curStatus = obj.RP.WriteTagVEX('audioDataR', 0, 'F32',...
                                         audioData(:, 2));
-            if ~status
+            if ~curStatus
                 error('Error writing to audioDataR buffer')
             end
             
-            status = obj.RP.WriteTagVEX('triggerIdx', 0, 'I32',...
+            curStatus = obj.RP.WriteTagVEX('triggerIdx', 0, 'I32',...
                                         triggerIdx);
-            if ~status
+            if ~curStatus
                 error('Error writing to triggerIdx buffer')
             end
             
-            status = obj.RP.WriteTagVEX('triggerVals', 0, 'I32',...
+            curStatus = obj.RP.WriteTagVEX('triggerVals', 0, 'I32',...
                                         triggerVals);
-            if ~status
+            if ~curStatus
                 error('Error writing to triggerVals buffer')
             end
             
-            status = obj.RP.WriteTagVEX('triggerDurations', 0, 'F32', ...
+            curStatus = obj.RP.WriteTagVEX('triggerDurations', 0, 'F32', ...
                                         triggerDurations*1000);
-            if ~status
+            if ~curStatus
                 error('Error writing to triggerDurations buffer')
             end
             
-            status = obj.RP.SetTagVal('stopSample');
-            if ~status
+            curStatus = obj.RP.SetTagVal('stopSample');
+            if ~curStatus
                 error('Error writing to stopSample tag')
             end
             
