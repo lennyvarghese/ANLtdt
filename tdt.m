@@ -26,14 +26,13 @@ classdef tdt
 % channel2Scale - the scaling value x mapping floating point values
 % between [-1,1] to [-x,x] for channel 2
 %
-%
 % class methods: 
 %
 % prepare_stimulus
 % play
 % stop
 %
-% last updated 2015-02-11, LAV, lennyv_at_bu_dot_edu
+% last updated 2015-03-08, LAV, lennyv_at_bu_dot_edu
 
     properties
         RP
@@ -61,9 +60,10 @@ classdef tdt
             obj.f1 = figure(figNum);
             set(obj.f1,'Position', [5 5 30 30], 'Visible', 'off');
             obj.RP = actxcontrol('RPco.x', [5 5 30 30], obj.f1);
-            
-            %change argument to 'GB' or 'USB' depending on TDT setup
-            obj.RP.ConnectRP2('USB', 1); 
+
+            % gigabit isn't supported anymore (as of tdt version 70)
+            obj.RP.ConnectRP2('USB', 1);
+
             %Clears all the Buffers and circuits on that RP2
             obj.RP.ClearCOF;
             %Loads circuit
@@ -90,8 +90,8 @@ classdef tdt
             
             obj.sampleRate = obj.RP.GetSFreq();
  
-            obj.RP.SetTagVal('headphoneScaler1', obj.channel1Scale);
-            obj.RP.SetTagVal('headphoneScaler2', obj.channel2Scale);
+            obj.RP.SetTagVal('chan1Scaler', obj.channel1Scale);
+            obj.RP.SetTagVal('chan2Scaler', obj.channel2Scale);
             
             fprintf('Channel 1, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel1Scale, obj.channel1Scale);
@@ -105,18 +105,20 @@ classdef tdt
         end
 
         function prepare_stimulus(obj, audioData, triggerInfo)
-            % prepare_stimulus(audioData, triggerInfo) function to load
+            % tdt.prepare_stimulus(audioData, triggerInfo) function to load
             % stimulus and triggers to TDT RP2 "playback.rcx"
             %
-            % RP: the TDT RP object, returned from "initialize_tdt.m"
-            % audioDataL: a 1D array specifying audio data for channel 1 (L) **
-            % See note 1 audioDataR: a 1D array specifying audio data for
-            % channel 2 (R) ** See note 1 triggerInfo: an n x 3 array
+            % audioData: a 2D array specifying audio data * See note 1 
+            %
+            % triggerInfo: an n x 3 array 
             % specifying index, value, duration tuples to send a digital "word"
             % value at the specified sample of playback for the specified
             % duration (in s). ** see note 2 
             %
-            % note 1: audioDataL and audioDataR must be limited to [-1, 1].
+            % note 1: audioData must be limited to [-1, 1], and must be in
+            % sample x channel format (the default for Matlab); it will be
+            % converted to TDT friendly format in this function.
+            %
             % This function will downconvert the arrays to single-precision
             % prior to writing to the TDT if they are not already stored as
             % single precision. By default, the circuit will apply a 5 ms
@@ -139,7 +141,7 @@ classdef tdt
             % input validation %
             %%%%%%%%%%%%%%%%%%%%
             
-            if size(audioData, 2) > obj.maxBufferSize
+            if size(audioData, 1) > obj.maxBufferSize
                 error('Audio data exceeds maximum buffer size.')
             end
             
@@ -173,19 +175,23 @@ classdef tdt
             end
             
             if (any(triggerVals > 255) || (any(triggerVals < 0)))
-                error('Trigger values must be between 0 and 255.')
+                error('Trigger values should be positive.')
             end
             
-            if (any(triggerIdx > obj.maxBufferSize) || (any(triggerVals < 1)))
+            if (any(triggerIdx > obj.maxBufferSize))
                 error('Trigger index must be smaller than max buffer size.')
             end
             
+            if (any(triggerIdx < 1))
+                error('Trigger index should be positive.')
+            end
+            
             if (any(triggerDurations < 0))
-                error('Trigger durations should be positive.')
+                error('Trigger durations should be non-negative.')
             end
                     
             if any(abs(audioData) > 1)
-                error('All audio data must be scaled between -1 and 1')
+                error('All audio data must be scaled between -1.0 and 1.0')
             end
             
             % 245 is 5 ms at 48828.125 Hz sample rate
@@ -201,13 +207,13 @@ classdef tdt
             obj.reset_buffers()
             
             status = obj.RP.WriteTagVEX('audioDataL', 0, 'F32',...
-                                        audioData(1,:));
+                                        audioData(:, 1));
             if ~status
                 error('Error writing to audioDataL buffer')
             end
             
             status = obj.RP.WriteTagVEX('audioDataR', 0, 'F32',...
-                                        audioData(2,:));
+                                        audioData(:, 2));
             if ~status
                 error('Error writing to audioDataR buffer')
             end
@@ -275,23 +281,32 @@ classdef tdt
             pause(0.01);
             currentSample = obj.get_current_sample();
             if currentSample ~= 0
-                error('buffer rewind error')
+                error('Buffer rewind error');
             end
-            obj.status = sprintf('stopped at buffer index %d', currentSample);
+            obj.status = sprintf('Stopped at buffer index %d', currentSample);
         end
 
         function close(obj)
-            obj.reset_buffers(true)
+            obj.reset_buffers(true);
             obj.RP.ClearCOF;
             close(obj.f1);
         end
             
 
-        function currentSample = get_current_sample(obj)
-            currentSample = obj.RP.GetTagVal('chan1BufIdx');
+        function currentSample1 = get_current_sample(obj)
+            currentSample1= obj.RP.GetTagVal('chan1BufIdx');
             currentSample2 = obj.RP.GetTagVal('chan2BufIdx');
-            if currentSample ~= currentSample2
-                error('channel buffers are misaligned (%d %d.)', currentSample, currentSample2)
+            if currentSample1 ~= currentSample2
+                error('Audio buffers are misaligned (%d/%d.)', currentSample, currentSample2)
+            end
+            
+            trigBufSample1 = obj.RP.GetTagVal('trigIdxBufferIdx');
+            trigBufSample2 = obj.RP.GetTagVal('trigValBufferIdx');
+            trigBufSample3 = obj.RP.GetTagVal('trigDurBufferIdx');
+            if (~(trigBufSample1 == trigBufSample2) || ...
+                ~(trigBufSample1 == trigBufSample3))
+                error('Trigger buffers are misaligned (%d/%d/%d.)',...
+                      trigBufSample1, trigBufSample2, trigBufSample3)
             end
         end
 
