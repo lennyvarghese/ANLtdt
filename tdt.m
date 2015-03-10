@@ -5,17 +5,16 @@ classdef tdt < handle
 % 
 % Inputs:
 % ----------------------------------------------------------------------------
-% scaling: controls the bounds defining full scale, in volts. Specify as a 2
-% element vector for different scaling per channel. On the RP2, this should not
-% exceed 10 V.
+% scaling: controls the bounds defining full scale, in volts. Specify as a
+% 2 element vector for different scaling per channel. On the RP2, this
+% should not exceed 10 V.
 %
-% bgNoise: controls the type of background noise playing for the duration that
-% the circuit is running. Possible options are "none" (no noise), "diotic"
-% (same values to both channels), or "dichotic" (different values to each
-% channel).
+% bgNoise: controls the type of background noise playing for the duration
+% that the circuit is running. Possible options are "none" (no noise) or
+% "dichotic" (different values to each channel).
 %
-% noiseAmp: the RMS amplitude of the noise in dB relative to full scale; e.g.,
-% if full scale voltage is 5 V, noiseRMS = 5 * 10^(noiseAmp / 20)
+% noiseAmp: the RMS amplitude of the noise relative to 1V RMS, in dB; e.g.,
+% noiseRMSVoltage = 10^(noiseAmpInDecibels / 20)
 %
 % figNum: by default, creates the ActiveX figure as figure number 99999;
 % specify an integer argument if for some reason you want another value.
@@ -46,8 +45,6 @@ classdef tdt < handle
 %
 %     noise1RMS / noise2RMS - the RMS value of the background noise (in V)
 %
-%     noise1Seed / noise2Seed - the noise random number seeds; should be
-%     identical for "diotic"
 %
 %     status: a status string describing the current state of the circuit
 %
@@ -72,8 +69,6 @@ classdef tdt < handle
         channel2Scale
         noise1RMS
         noise2RMS
-        noise1Seed
-        noise2Seed
         status
     end
 
@@ -91,37 +86,24 @@ classdef tdt < handle
 
             %%% control the background noise type
             if nargin < 2
-               bgNoise = 'none';
+               bgNoise = 'off';
             end
             
-            if ~(strcmpi(bgNoise, 'none') || ...
-                 strcmpi(bgNoise, 'diotic') || ...
-                 strcmpi(bgNoise, 'dichotic'))
-                error('bgNoise should be none/diotic/dichotic')
+            if ~(strcmpi(bgNoise, 'on') || ...
+                 strcmpi(bgNoise, 'off'))
+                error('bgNoise should be ''on'' or ''off''')
             end
-            
-            if ~strcmpi(bgNoise, 'none')
-                seedNum1 = randi(2^15);
-            else
-                seedNum1 = 0;
-            end
-            
-            if strcmpi(bgNoise, 'dichotic') % two different random seeds
-                seedNum2 = randi(2^15);
-            else
-                seedNum2 = seedNum1; % use same random seed for diotic/none
-            end
-            
+
             %%% control the background noise amplitude (dbFS)
             if nargin < 3
-                noiseAmpDB = [-1000, -1000];
+                noiseAmpDB = [-Inf, -Inf];
             end
             
             if length(noiseAmpDB) < 2
                 noiseAmpDB(2) = noiseAmpDB(1);
             end
             
-            noiseAmp = 10.^(noiseAmpDB ./ 20) .* scaling;
+            noiseAmpVolts = 10.^(noiseAmpDB ./ 20);
 
             if nargin < 4 
                 figNum = 99999;
@@ -144,11 +126,7 @@ classdef tdt < handle
 
             % Start circuit and get status. 
             % If Status returns 7, everything is working.
-            obj.RP.Run;
 
-            if obj.RP.GetStatus ~= 7
-                error('TDT connection error. Try rebooting the TDT.');
-            end
             
             % store some relevant info in the object itself
 
@@ -158,34 +136,47 @@ classdef tdt < handle
             obj.channel1Scale = single(scaling(1));
             obj.channel2Scale = single(scaling(2));
             
-            obj.noise1RMS = single(noiseAmp(1));
-            obj.noise2RMS = single(noiseAmp(2));
-            
-            obj.noise1Seed = single(seedNum1);
-            obj.noise2Seed = single(seedNum2);
-            
-            % zero tag the buffer
+            obj.noise1RMS = single(noiseAmpVolts(1));
+            obj.noise2RMS = single(noiseAmpVolts(2));
+
+            % zero tag the relevant buffers
             obj.RP.ZeroTag('audioChannel1');
             obj.RP.ZeroTag('audioChannel2');
-            obj.RP.ZeroTag('triggerIdx')
-            obj.RP.ZeroTag('triggerVals')
-            obj.RP.ZeroTag('triggerDurations')
-            obj.RP.ZeroTag('stopSample')
+            obj.RP.ZeroTag('triggerIdx');
+            obj.RP.ZeroTag('triggerVals');
+            obj.RP.ZeroTag('triggerDurations');
             
+            % set the parameters that shouldn't change during the experiment
             obj.RP.SetTagVal('chan1Scaler', obj.channel1Scale);
             obj.RP.SetTagVal('chan2Scaler', obj.channel2Scale);
             obj.RP.SetTagVal('chan1NoiseAmp', obj.noise1RMS);
             obj.RP.SetTagVal('chan2NoiseAmp', obj.noise2RMS);
-            obj.RP.SetTagVal('chan1NoiseSeed', obj.noise1Seed);
-            obj.RP.SetTagVal('chan2NoiseSeed', obj.noise2Seed);
+            obj.RP.SetTagVal('chan1NoiseSeed', randi(2^15));
+            obj.RP.SetTagVal('chan2NoiseSeed', randi(2^15));
+
+            obj.maxBufferSize = 4.185E6;
             
+            % now attempt to actually run the circuit
+            obj.RP.Run;
+            if obj.RP.GetStatus ~= 7
+                obj.RP.close();
+                error('TDT connection error. Try rebooting the TDT.');
+            end
+            
+            % do an "initial reset" of the buffers to fix indexing on
+            % source buffers
+            obj.RP.SoftTrg(3);
+            
+            % display some status information to the user
             fprintf('Channel 1, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel1Scale, obj.channel1Scale);
             fprintf('Channel 2, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel2Scale, obj.channel2Scale);
-
-            obj.maxBufferSize = 4.185E6;
-
+            fprintf('Channel 1, masking noise RMS (V) = %2.4f\n', ...
+                 obj.channel1Scale * obj.noise1RMS);
+            fprintf('Channel 2, masking noise RMS (V) = %2.4f\n', ...
+                 obj.channel2Scale * obj.noise2RMS);
+             
             currentSample = obj.get_current_sample();
             obj.status = sprintf('stopped at buffer index %d', ...
                                  currentSample);
@@ -256,9 +247,10 @@ classdef tdt < handle
                 triggerVals = int32(triggerInfo(:, 2));
                 triggerDurations = single(triggerInfo(:,3));
             else
+                % send a single trigger of value 1 at start of playback
                 triggerIdx = int32(1);
-                triggerVals = int32(0);
-                triggerDurations = single(0);
+                triggerVals = int32(1);
+                triggerDurations = single(0.005);
             end
             
             if  any(triggerVals < 0)
@@ -367,8 +359,10 @@ classdef tdt < handle
 
         function close(obj)
             obj.reset_buffers(true);
+            obj.RP.Halt;
+            pause(0.01);
             obj.RP.ClearCOF;
-            close(obj.f1);
+            obj.status = sprintf('Not connected.');
         end
             
 
@@ -378,7 +372,7 @@ classdef tdt < handle
             if currentSample1 ~= currentSample2
                 obj.reset_buffers(False)
                 error(['Audio buffers are misaligned (%d/%d.).',...
-                       'Buffers reset.'], ...
+                       'Buffers reset, but not cleared.'], ...
                        currentSample, currentSample2)
             end
             
@@ -389,7 +383,7 @@ classdef tdt < handle
                 ~(trigBufSample1 == trigBufSample3))
                 obj.reset_buffers(False)
                 error(['Trigger buffers are misaligned (%d/%d/%d.)',...
-                       'Buffers reset.'],...
+                       'Buffers reset, but not cleared.'],...
                        trigBufSample1, trigBufSample2, trigBufSample3)
             end
         end
