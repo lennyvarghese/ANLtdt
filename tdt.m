@@ -277,9 +277,13 @@ classdef tdt < handle
             % write data to TDT %
             %%%%%%%%%%%%%%%%%%%%%
             
+            triggerIdx = [triggerIdx; 0];
+            triggerVals = [triggerVals; 0];
+            triggerDurations = [triggerDurations; 0];
+            
             
             % reset buffer indexing:
-            obj.reset_buffers()
+            obj.reset_buffers(true)
             
             curStatus = obj.RP.WriteTagVEX('audioDataL', 0, 'F32',...
                                            audioData(:, 1));
@@ -314,13 +318,23 @@ classdef tdt < handle
             disp('Stimulus loaded.')
         end
 
-        function play(obj)
+        function play(obj, stopAfter)
+            if nargin == 1
+                stopAfter = obj.stimSize - 245;
+            end
+            stat = obj.RP.SetTagVal('stopSample', stopAfter);
+            if ~stat
+                error('error setting stop sample.')
+            end
+            
             obj.RP.SoftTrg(1);
-            obj.status = 'playing';
         end
 
         function stop(obj)
-            obj.RP.SoftTrg(2);
+            stat = obj.RP.SetTagVal('stopSample', 0);
+            if ~stat
+                error('error setting stop sample.')
+            end
             pause(0.01);
             currentSample = obj.get_current_sample();
             obj.status = sprintf('stopped at buffer index %d', currentSample);
@@ -370,10 +384,10 @@ classdef tdt < handle
             currentSample1= obj.RP.GetTagVal('chan1BufIdx');
             currentSample2 = obj.RP.GetTagVal('chan2BufIdx');
             if currentSample1 ~= currentSample2
-                obj.reset_buffers(False)
+                obj.reset_buffers(false)
                 error(['Audio buffers are misaligned (%d/%d.).',...
                        'Buffers reset, but not cleared.'], ...
-                       currentSample, currentSample2)
+                       currentSample1, currentSample2)
             end
             
             trigBufSample1 = obj.RP.GetTagVal('trigIdxBufferIdx');
@@ -381,7 +395,7 @@ classdef tdt < handle
             trigBufSample3 = obj.RP.GetTagVal('trigDurBufferIdx');
             if (~(trigBufSample1 == trigBufSample2) || ...
                 ~(trigBufSample1 == trigBufSample3))
-                obj.reset_buffers(False)
+                obj.reset_buffers(false)
                 error(['Trigger buffers are misaligned (%d/%d/%d.)',...
                        'Buffers reset, but not cleared.'],...
                        trigBufSample1, trigBufSample2, trigBufSample3)
