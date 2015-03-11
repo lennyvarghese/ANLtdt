@@ -5,16 +5,17 @@ classdef tdt < handle
 % 
 % Inputs:
 % ----------------------------------------------------------------------------
-% scaling: controls the bounds defining full scale, in volts. Specify as a
-% 2 element vector for different scaling per channel. On the RP2, this
-% should not exceed 10 V.
-%
-% bgNoise: controls the type of background noise playing for the duration
-% that the circuit is running. Possible options are "none" (no noise) or
-% "dichotic" (different values to each channel).
+% scaling: controls the bounds defining full scale, in volts. Specify as a 2
+% element vector for different scaling per channel. On the RP2, this should not
+% exceed 10 V.
+% 
+% trigDuration: the duration, in seconds, that each event signal should last.
+% Default: 5E-3 s
 %
 % noiseAmp: the RMS amplitude of the noise relative to 1V RMS, in dB; e.g.,
-% noiseRMSVoltage = 10^(noiseAmpInDecibels / 20)
+% noiseRMSVoltage = 10^(noiseAmpInDecibels / 20). The actual output RMS depends
+% on the value set for "scaling". Accepts -Inf as an input for no noise (the
+% default).
 %
 % figNum: by default, creates the ActiveX figure as figure number 99999;
 % specify an integer argument if for some reason you want another value.
@@ -50,15 +51,15 @@ classdef tdt < handle
 %
 % Methods:
 %
-%     prepare_stimulus 
+%     load_stimulus 
 %     play
-%     stop
+%     pause 
 %     rewind
 %     reset
 %     close
 %     get_current_sample
 %
-% last updated 2015-03-09, LAV, lennyv_at_bu_dot_edu
+% Last updated 2015-03-10, LAV, lennyv_at_bu_dot_edu
 
     properties
         RP
@@ -69,11 +70,16 @@ classdef tdt < handle
         channel2Scale
         noise1RMS
         noise2RMS
+        trigDuration
         status
+        stimSize
     end
 
+
     methods
-        function obj = tdt(scaling, bgNoise, noiseAmpDB, figNum)
+
+
+        function obj = tdt(scaling, trigDuration, noiseAmpDB, figNum)
             
             %%% voltage scaling
             if nargin < 1 
@@ -85,17 +91,12 @@ classdef tdt < handle
             end
 
             %%% control the background noise type
-            if nargin < 2
-               bgNoise = 'off';
-            end
-            
-            if ~(strcmpi(bgNoise, 'on') || ...
-                 strcmpi(bgNoise, 'off'))
-                error('bgNoise should be ''on'' or ''off''')
+            if nargin < 2 || isempty(trigDuration)
+               trigDuration = 5E-3; % s
             end
 
             %%% control the background noise amplitude (dbFS)
-            if nargin < 3
+            if nargin < 3 || isempty(noiseAmpDB)
                 noiseAmpDB = [-Inf, -Inf];
             end
             
@@ -105,7 +106,7 @@ classdef tdt < handle
             
             noiseAmpVolts = 10.^(noiseAmpDB ./ 20);
 
-            if nargin < 4 
+            if nargin < 4 || isempty(figNum)
                 figNum = 99999;
             end
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -133,6 +134,8 @@ classdef tdt < handle
             % sample rate
             obj.sampleRate = obj.RP.GetSFreq();
 
+            obj.trigDuration = trigDuration;
+
             obj.channel1Scale = single(scaling(1));
             obj.channel2Scale = single(scaling(2));
             
@@ -144,7 +147,7 @@ classdef tdt < handle
             obj.RP.ZeroTag('audioChannel2');
             obj.RP.ZeroTag('triggerIdx');
             obj.RP.ZeroTag('triggerVals');
-            obj.RP.ZeroTag('triggerDurations');
+            obj.RP.ZeroTag('triggerDuration');
             
             % set the parameters that shouldn't change during the experiment
             obj.RP.SetTagVal('chan1Scaler', obj.channel1Scale);
@@ -153,6 +156,7 @@ classdef tdt < handle
             obj.RP.SetTagVal('chan2NoiseAmp', obj.noise2RMS);
             obj.RP.SetTagVal('chan1NoiseSeed', randi(2^15));
             obj.RP.SetTagVal('chan2NoiseSeed', randi(2^15));
+            obj.RP.SetTagVal('triggerDuration', 1000 * obj.trigDuration)
 
             obj.maxBufferSize = 4.185E6;
             
@@ -178,19 +182,22 @@ classdef tdt < handle
                  obj.channel2Scale * obj.noise2RMS);
              
             currentSample = obj.get_current_sample();
+
+            obj.stimSize = 0;
             obj.status = sprintf('stopped at buffer index %d', ...
                                  currentSample);
         end
 
-        function prepare_stimulus(obj, audioData, triggerInfo)
-        % tdt.prepare_stimulus(audioData, triggerInfo) function to load
-        % stimulus and triggers to TDT RP2 "playback.rcx"
+
+        function load_stimulus(obj, audioData, triggerInfo)
+        % tdt.load_stimulus(audioData, triggerInfo) function to load stimulus
+        % and triggers to "playback.rcx"
         %
         % audioData: a 2D array specifying audio data * See note 1 
         %
-        % triggerInfo: an n x 3 array specifying index, value, duration tuples
-        % to send a digital "word" value at the specified sample of playback
-        % for the specified duration (in s). ** see note 2 
+        % triggerInfo: an n x 2 array specifying index and value tuples to send
+        % a digital "word" value at the specified sample of playback.. ** see
+        % note 2 
         %
         % note 1: audioData must be limited to [-1, 1], and must be in sample x
         % channel format (the default for Matlab); it will be converted to TDT
@@ -210,9 +217,10 @@ classdef tdt < handle
         % 255, corresponding to the 8 bit precision of the digital output. If a
         % value is > 255, only the least significant 8 bits are used (I think).
         % Duration should be specified in seconds. It should be obvious that
-        % the values need to be non-negative.
+        % the values need to be non-negative. Trigger duration is always 10
+        % samples on the TDT.
         %
-        % last updated: 2015-03-09, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-03-10, LAV, lennyv_at_bu_dot_edu
             
             
             %%%%%%%%%%%%%%%%%%%%
@@ -222,16 +230,20 @@ classdef tdt < handle
             if size(audioData, 1) > obj.maxBufferSize
                 error('Audio data exceeds maximum buffer size.')
             end
+
+            if size(audioData, 2) ~= 2
+                error('Audio data must be two channel.')
+            end
             
             if nargin < 3
                 triggerInfo = [];
             else
-                if (size(triggerInfo, 2) ~= 3) || ...
+                if (size(triggerInfo, 2) ~= 2) || ...
                     (length(size(triggerInfo)) ~= 2) || ...
                     any(triggerInfo(:) < 0)
             
                     error(['Trigger info must be specified as',...
-                          '[idx, val, dur], array, and the values '...
+                          '[idx, val], array, and the values '...
                           'should all be positive.'])
                 end
             end
@@ -241,16 +253,20 @@ classdef tdt < handle
             if ~isa(audioData, 'single')
                 audioData = single(audioData);
             end
+
+            obj.stimSize = size(audioData, 2);
+            if stimSize < 490
+                error(['Stimulus should be at least 490 samples long.' ...
+                       'Prepend or append zeros and try again.'])
+            end
             
             if ~isempty(triggerInfo)
                 triggerIdx = int32(triggerInfo(:, 1));
                 triggerVals = int32(triggerInfo(:, 2));
-                triggerDurations = single(triggerInfo(:,3));
             else
                 % send a single trigger of value 1 at start of playback
                 triggerIdx = int32(1);
                 triggerVals = int32(1);
-                triggerDurations = single(0.005);
             end
             
             if  any(triggerVals < 0)
@@ -270,83 +286,84 @@ classdef tdt < handle
             end
                     
             if any(abs(audioData) > 1)
-                error('All audio data must be scaled between -1.0 and 1.0')
+                error('All audio data must be scaled between -1.0 and 1.0.')
             end
 
             %%%%%%%%%%%%%%%%%%%%%
             % write data to TDT %
             %%%%%%%%%%%%%%%%%%%%%
-            
-            triggerIdx = [triggerIdx; 0];
+           
+            % hack - the WriteTagVEX methods don't like single value inputs
+            % also correct for 1 sample difference in index
+            triggerIdx = [triggerIdx - 1; -1];
             triggerVals = [triggerVals; 0];
-            triggerDurations = [triggerDurations; 0];
             
-            
-            % reset buffer indexing:
+            % reset buffer indexing and zeroTag everything
             obj.reset_buffers(true)
             
             curStatus = obj.RP.WriteTagVEX('audioDataL', 0, 'F32',...
                                            audioData(:, 1));
             if ~curStatus
-                error('Error writing to audioDataL buffer')
+                error('Error writing to audioDataL buffer.')
             end
             
             curStatus = obj.RP.WriteTagVEX('audioDataR', 0, 'F32',...
                                            audioData(:, 2));
             if ~curStatus
-                error('Error writing to audioDataR buffer')
+                error('Error writing to audioDataR buffer.')
             end
             
             curStatus = obj.RP.WriteTagVEX('triggerIdx', 0, 'I32',...
                                            triggerIdx);
             if ~curStatus
-                error('Error writing to triggerIdx buffer')
+                error('Error writing to triggerIdx buffer.')
             end
             
             curStatus = obj.RP.WriteTagVEX('triggerVals', 0, 'I32',...
                                            triggerVals);
             if ~curStatus
-                error('Error writing to triggerVals buffer')
-            end
-            
-            curStatus = obj.RP.WriteTagVEX('triggerDurations', 0, 'F32', ...
-                                           triggerDurations*1000);
-            if ~curStatus
-                error('Error writing to triggerDurations buffer')
+                error('Error writing to triggerVals buffer.')
             end
             
             disp('Stimulus loaded.')
         end
 
+
         function play(obj, stopAfter)
-            if nargin == 1
+            if nargin == 2
                 stopAfter = obj.stimSize - 245;
             end
+            if stopAfter < obj.get_current_sample()
+                error(['Buffer index has passed the desired stop point. ' ...
+                       'Perhaps you meant to rewind the buffer first?'])
             stat = obj.RP.SetTagVal('stopSample', stopAfter);
             if ~stat
-                error('error setting stop sample.')
+                error('Error setting stop sample.')
             end
-            
             obj.RP.SoftTrg(1);
         end
 
-        function stop(obj)
+
+        function pause(obj)
             stat = obj.RP.SetTagVal('stopSample', 0);
             if ~stat
-                error('error setting stop sample.')
+                error('Error setting stop sample.')
             end
             pause(0.01);
             currentSample = obj.get_current_sample();
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
+
         
         function rewind(obj)
-            obj.reset_buffers(false)
+            obj.reset_buffers(false);
         end
+
         
         function reset(obj)
-            obj.reset_buffers(true)
+            obj.reset_buffers(true);
         end
+
 
         function reset_buffers(obj, clearBuffer)
             
@@ -358,7 +375,6 @@ classdef tdt < handle
                 obj.RP.ZeroTag('audioDataR');
                 obj.RP.ZeroTag('triggerIdx');
                 obj.RP.ZeroTag('triggerVals');
-                obj.RP.ZeroTag('triggerDurations');
             end
 
             obj.RP.SoftTrg(3);
@@ -370,6 +386,7 @@ classdef tdt < handle
             obj.status = sprintf('Stopped at buffer index %d',...
                                  currentSample);
         end
+
 
         function close(obj)
             obj.reset_buffers(true);
@@ -384,7 +401,7 @@ classdef tdt < handle
             currentSample1= obj.RP.GetTagVal('chan1BufIdx');
             currentSample2 = obj.RP.GetTagVal('chan2BufIdx');
             if currentSample1 ~= currentSample2
-                obj.reset_buffers(false)
+                obj.reset_buffers(false);
                 error(['Audio buffers are misaligned (%d/%d.).',...
                        'Buffers reset, but not cleared.'], ...
                        currentSample1, currentSample2)
@@ -392,13 +409,11 @@ classdef tdt < handle
             
             trigBufSample1 = obj.RP.GetTagVal('trigIdxBufferIdx');
             trigBufSample2 = obj.RP.GetTagVal('trigValBufferIdx');
-            trigBufSample3 = obj.RP.GetTagVal('trigDurBufferIdx');
-            if (~(trigBufSample1 == trigBufSample2) || ...
-                ~(trigBufSample1 == trigBufSample3))
-                obj.reset_buffers(false)
-                error(['Trigger buffers are misaligned (%d/%d/%d.)',...
+            if trigBufSample1 ~= trigBufSample2
+                obj.reset_buffers(false);
+                error(['Trigger buffers are misaligned (%d/%d.)',...
                        'Buffers reset, but not cleared.'],...
-                       trigBufSample1, trigBufSample2, trigBufSample3)
+                       trigBufSample1, trigBufSample2)
             end
         end
 
