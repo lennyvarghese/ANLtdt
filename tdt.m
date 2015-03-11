@@ -1,5 +1,6 @@
 classdef tdt < handle
-% tdtObject = tdt(paradigmType, scaling, trigDuration, noiseAmp, figNum=99999)
+% tdtObject = tdt(paradigmType, sampleRate, scaling, trigDuration, ...
+%                 noiseAmp, figNum=99999)
 %
 % Creates a new tdt object.
 % 
@@ -8,6 +9,10 @@ classdef tdt < handle
 %
 % paradigmType: 'playback'. Future versions may support 'play/record' or
 % 'record'.
+%
+% requestedSampleRate: must be 48, 24, or 12, for 48828.125 Hz, 24414.0625 Hz,
+% or 12207.03125 Hz, respectively. Please make note of the non-standard sample
+% rates.
 %
 % scaling: controls the bounds defining full scale, in volts. Specify as a 2
 % element vector for different scaling per channel. On the RP2, this should not
@@ -29,34 +34,34 @@ classdef tdt < handle
 % ----------------------------------------------------------------------------
 %
 % tdtObject: an object of type "tdt", with the following properties and
-% methods:
+%   methods:
 %
-% Properties:
+%   Properties:
 %
-%     RP - the "usual" RP object from which TDT functions are accessed.
+%       RP - the "usual" RP object from which TDT functions are accessed.
 %
-%     sampleRate - the sample rate at which the RP2/RP2.1 operates
+%       sampleRate - the real sample rate at which the RP2/RP2.1 operates
 %
-%     bufferSize - the maximum number of samples that can be handled by the
-%     circuit without further input from the user. The exact value will vary
-%     depending on the paradigm type.
+%       bufferSize - the maximum number of samples that can be handled by the
+%       circuit without further input from the user. The exact value will vary
+%       depending on the paradigm type.
 %
-%     channel1Scale / channel2Scale - the scaling value x mapping floating
-%     point values between [-1,1] to [-x,x] for channel 1/2 (in Volts)
+%       channel1Scale / channel2Scale - the scaling value x mapping floating
+%       point values between [-1,1] to [-x,x] for channel 1/2 (in Volts)
 %
-%     noise1RMS / noise2RMS - the RMS value of the background noise (in V)
+%       noise1RMS / noise2RMS - the RMS value of the background noise (in V)
 %
-%     status: a status string describing the current state of the circuit
+%       status: a status string describing the current state of the circuit
 %
-% User-facing methods:
+%       User-facing methods; (type "help tdt.<function_name>" for a full
+%       description, where <function_name> is one of the following:
 %
-%     load_stimulus 
-%     play
-%     pause
-%     rewind 
-%     reset
-%     send_event
-%     get_current_sample
+%       load_stimulus play
+%       pause
+%       rewind 
+%       reset
+%       send_event
+%       get_current_sample
 %
 % Important note: a 5 ms cosine on/off ramp is applied to the stimulus by
 % default to enable dynamic control of play/pause without clicking sounds. This
@@ -86,11 +91,25 @@ classdef tdt < handle
     end
 
     methods
-        function obj = tdt(paradigmType, scaling, trigDuration, noiseAmpDB, ...
-                           figNum)
-            
+        function obj = tdt(paradigmType, requestedSampleRate, scaling, ...
+                           trigDuration, noiseAmpDB, figNum)
+          
+            %%% sample rate check
+            if nargin < 2
+                error('Desired sample rate must be specified.')
+            end
+
+            if 48 == requestedSampleRate 
+                rateTag = 3;
+            elseif 24 == requestedSampleRate
+                rateTag = 2;
+            elseif 12 == requestedSampleRate 
+                rateTag = 1;
+            else
+                error('invalid sample rate specified (must be 48, 24, 12)')
+
             %%% voltage scaling
-            if nargin < 2 
+            if nargin < 3 
                 error('Scaling must be specified for each output channel.')
             end
 
@@ -99,12 +118,12 @@ classdef tdt < handle
             end
 
             %%% control the background noise type
-            if nargin < 3 || isempty(trigDuration)
+            if nargin < 4 || isempty(trigDuration)
                trigDuration = 5E-3; % s
             end
 
             %%% control the background noise amplitude (dbFS)
-            if nargin < 4 || isempty(noiseAmpDB)
+            if nargin < 5 || isempty(noiseAmpDB)
                 noiseAmpDB = [-Inf, -Inf];
             end
             
@@ -114,7 +133,7 @@ classdef tdt < handle
             
             noiseAmpVolts = 10.^(noiseAmpDB ./ 20);
 
-            if nargin < 5 || isempty(figNum)
+            if nargin < 6 || isempty(figNum)
                 figNum = 99999;
             end
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -145,7 +164,7 @@ classdef tdt < handle
                 
                 clear fileID temp binInfo
                 
-                obj.RP.LoadCOFsf('bin/playback.rcx',3);
+                obj.RP.LoadCOFsf('bin/playback.rcx', rateTag);
             else
                 error('paradigm type is currently unsupported.')
             end
