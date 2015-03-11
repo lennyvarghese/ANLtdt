@@ -56,7 +56,8 @@ classdef tdt < handle
 %       User-facing methods; (type "help tdt.<function_name>" for a full
 %       description, where <function_name> is one of the following:
 %
-%       load_stimulus play
+%       load_stimulus 
+%       play
 %       pause
 %       rewind 
 %       reset
