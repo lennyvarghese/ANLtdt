@@ -50,7 +50,11 @@ classdef tdt < handle
 %
 % User-facing methods:
 %
-%     load_stimulus play pause rewind reset
+%     load_stimulus 
+%     play
+%     pause
+%     rewind 
+%     reset
 %
 % Important note: a 5 ms cosine on/off ramp is applied to the stimulus by
 % default to enable dynamic control of play/pause without clicking sounds. This
@@ -166,7 +170,7 @@ classdef tdt < handle
                             obj.channel2Scale;
             
             % as per TDT documentation on "GaussNoise" component
-            if obj.noise1RMS > 2.1 || obj.noise2RMS > 2.1
+            if (obj.noise1RMS > 2.1) || (obj.noise2RMS > 2.1)
                 error('Noise RMS is too high. Clipping will occur.')
             end
 
@@ -221,7 +225,7 @@ classdef tdt < handle
         %
         % function to load stimulus and triggers to TDT circuit.
         %
-        % audioData: a 2D array specifying audio data * See note 1
+        % audioData: a 2D array specifying audio data ** See note 1
         %
         % triggerInfo: an n x 2 array specifying index and value tuples to send
         % a digital "word" value at the specified sample of playback. ** see
@@ -234,9 +238,9 @@ classdef tdt < handle
         % This function will downconvert the arrays to single-precision prior
         % to writing to the TDT if they are not already stored as single
         % precision. By default, the circuit will apply a 5 ms cosine-squared
-        % ramp to the stimuli when "play" and "stop" are called. To avoid
-        % having the cosine ramp alter a very short stimulus (say, a click),
-        % pad the stimulus with at least 245 "0" values on either end
+        % ramp to the beginning/end stimuli when "play" and "pause" are called.
+        % To avoid having the cosine ramp alter a very short stimulus (say, a
+        % click), pad the stimulus with at least 245 "0" values on either end
         % (corresponding to 5 ms at the default 48828.125 Hz sample rate).
         %
         % note 2: Trigger samples should be specified using Matlab index style,
@@ -461,6 +465,18 @@ classdef tdt < handle
     
     methods(Access='private')
         function reset_buffers(obj, clearBuffer)
+        % tdt.reset_buffers(clearBuffer)
+        %
+        % Resets and optionally zero-tags the buffers in the circuit.
+        %
+        % Inputs:
+        % --------------------------------------------------------------------
+        % 
+        % clearBuffer: boolean. If true, will zero-tag (i.e., erase) buffers by
+        % setting them to 0. Otherwise just resets the all buffer indexing to
+        % 0.
+        %
+        % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu           
             
             obj.RP.SoftTrg(2);
             pause(0.01);
@@ -483,6 +499,13 @@ classdef tdt < handle
         end
         
         function delete(obj)
+        % tdt.delete()
+        %
+        % cleanly back out and close the TDT when the object is deleted. Not
+        % meant to be called by the user.
+        %
+        % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
+
             obj.reset_buffers(true);
             obj.RP.Halt;
             pause(0.01);
