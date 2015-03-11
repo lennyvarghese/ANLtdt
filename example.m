@@ -1,22 +1,22 @@
 %% Initialization and clean shutdown examples
 
 % set max/min on both channel to 0.1 V; no background noise, default trigger
-% durations (5 ms)
-myTDT = tdt('playback', 0.1, [], -Inf);
+% durations (5 ms), 24 kHz sample rate
+myTDT = tdt('playback', 24, 0.1, [], -Inf);
 pause(1)
 myTDT.close();
 clear myTDT
 
 % set channel scaling to 0.2V in left channel, 0.3V in right channel; set
-% trigger durations to 10 ms; wait 1 second, and close out.
-myTDT = tdt('playback', [0.2, 0.3], 0.01);
+% trigger durations to 10 ms; sample rate 48Khz wait 1 second, and close out.
+myTDT = tdt('playback', 48, [0.2, 0.3], 0.01);
 pause(1);
 myTDT.close()
 clear myTDT
 
 % set channel scaling to 1.1 V, 1 ms trigger durations, turn on continuous
 % background noise at -70 dB re: 1V RMS; wait 1 second, then close out.
-myTDT = tdt('playback', 1.1, 1E-3, -70);
+myTDT = tdt('playback', 48, 1.1, 1E-3, -70);
 pause(1);
 myTDT.close()
 clear myTDT
@@ -25,7 +25,7 @@ clear myTDT
 % durations, turn on continuous background noise in left ear at -60 dB re: 1V
 % RMS but no noise in the other ear.  leave this one instance open for the
 % other examples.
-myTDT = tdt('playback', [1.1, 1], 1E-3, [-Inf, -60]);
+myTDT = tdt('playback', 48, [1.1, 1], 1E-3, [-Inf, -60]);
 pause(1);
 myTDT.close()
 clear myTDT
@@ -35,7 +35,7 @@ clear myTDT
 
 %% Stimulus creation and transfer to TDT
 
-myTDT = tdt('playback', [1, 1], 1E-3, [-Inf, -20]);
+myTDT = tdt('playback', 24, [1, 1], 1E-3, [-Inf, -20]);
 
 % create a stimulus
 t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);

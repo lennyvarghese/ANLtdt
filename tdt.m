@@ -107,6 +107,7 @@ classdef tdt < handle
                 rateTag = 1;
             else
                 error('invalid sample rate specified (must be 48, 24, 12)')
+            end
 
             %%% voltage scaling
             if nargin < 3 
