@@ -55,6 +55,8 @@ classdef tdt < handle
 %     pause
 %     rewind 
 %     reset
+%     send_event
+%     get_current_sample
 %
 % Important note: a 5 ms cosine on/off ramp is applied to the stimulus by
 % default to enable dynamic control of play/pause without clicking sounds. This
@@ -247,9 +249,9 @@ classdef tdt < handle
         % i.e., the first sample of audio is sample 1. Permissible trigger
         % values will vary by device; e.g., on the RP2, values should be <=
         % 255, corresponding to the 8 bit precision of the digital output. If a
-        % value is > 255, only the least significant 8 bits are used (I think).
-        % Duration should be specified in seconds. It should be obvious that
-        % the values need to be non-negative.
+        % value is > 255, only the least significant 8 bits are used. Duration 
+        % should be specified in seconds. It should be obvious that the values
+        % need to be non-negative.
         %
         % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
             
@@ -366,7 +368,7 @@ classdef tdt < handle
         function play(obj, stopAfter)
         % tdt.play(stopAfter)
         %
-        % Plays the contents of the audio buffers on the TDT
+        % Plays the contents of the audio buffers on the TDT.
         %
         % Inputs:
         % --------------------------------------------------------------------
@@ -388,6 +390,8 @@ classdef tdt < handle
                 error('Error setting stop sample.')
             end
             obj.RP.SoftTrg(1);
+            obj.status = sprintf('playing then stopping at buffer index %d',...
+                                 stopAfter);
         end
 
 
@@ -402,7 +406,7 @@ classdef tdt < handle
             if ~stat
                 error('Error setting stop sample.')
             end
-            pause(0.01);
+            pause(0.02);
             currentSample = obj.get_current_sample();
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
@@ -417,6 +421,8 @@ classdef tdt < handle
         % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
         
             obj.reset_buffers(false);
+            currentSample = obj.get_current_sample();
+            obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
 
         
@@ -428,9 +434,25 @@ classdef tdt < handle
         % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
 
             obj.reset_buffers(true);
+            obj.stimSize = 0;
+            currentSample = obj.get_current_sample();
+            obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
         
-
+        function send_event(obj, eventVal)
+        % tdt.send_event(eventVal)
+        %
+        % Sends an arbitrary integer event to the digital out port on the TDT. 
+        %
+        % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
+        
+            statusVal = obj.RP.SetTagVal('arbitraryEvent', eventVal);
+            if ~statusVal
+                error('Event could not be written.')
+            end
+            pause(0.01);
+            obj.RP.SoftTrg(4);
+        end
         
         function [currentSample1, trigBufSample1] = get_current_sample(obj)
         % [audioIdx, triggerIdx] = tdt.get_current_sample()
@@ -467,7 +489,8 @@ classdef tdt < handle
         function reset_buffers(obj, clearBuffer)
         % tdt.reset_buffers(clearBuffer)
         %
-        % Resets and optionally zero-tags the buffers in the circuit.
+        % Resets and optionally zero-tags the buffers in the circuit. Not meant
+        % to be called by the end user.
         %
         % Inputs:
         % --------------------------------------------------------------------

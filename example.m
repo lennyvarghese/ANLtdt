@@ -35,22 +35,22 @@ clear myTDT
 
 %% Stimulus creation and transfer to TDT
 
-myTDT = tdt('playback', [1.1, 1], 1E-3, [-Inf, -60]);
+myTDT = tdt('playback', [1, 1], 1E-3, [-Inf, -20]);
 
 % create a stimulus
-t = 0:(1/myTDT.sampleRate):(1 - 1/myTDT.sampleRate);
+t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
 chan1Stim = sin(2*pi*1000*t);
 chan2Stim = zeros(size(chan1Stim));
 
-% stimulus must be in 2 channel row vector format
+% stimulus must be in 2 channel (row vector) format
 x = [chan1Stim', chan2Stim'];
 size(x)
 
 % Send event "1" when playback starts (sample 1), and another event "2"
-% at sample 2000, and an event 35 at sample 4000
-trigInfo = [   1,  1;
-            2000,  2;
-            4000, 35];
+% at sample 10000, and an event 35 at sample 20000
+trigInfo = [   1,   1;
+            10000,  2;
+            20000, 35];
 
 % send the stimulus and trigger information to the TDT
 myTDT.load_stimulus(x, trigInfo);
@@ -64,7 +64,8 @@ myTDT.load_stimulus(x, trigInfo);
 % play the entire duration; this is non-blocking, so will need a pause()-type
 % command that accounts for the entire stimulus duration
 myTDT.play();
-pause(1.01);
+pause(myTDT.stimSize / myTDT.sampleRate + 0.05);
+
 
 % rewind, but don't reset the buffers
 myTDT.rewind();
