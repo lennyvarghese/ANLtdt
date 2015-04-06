@@ -8,6 +8,8 @@ classdef tdt < handle
 % ----------------------------------------------------------------------------
 %
 % paradigmType: 'playback_1channel' or 'playback_2channel'. 
+%    playback_1channel: one-channel stimuli up to 8.3842E6 samples
+%    playback_2channel: two-channel stimuli up to 4.1921E6 samples
 %
 % requestedSampleRate: must be 48, 24, or 12, for 48828.125 Hz, 24414.0625 Hz,
 % or 12207.03125 Hz, respectively. Please make note of the non-standard sample
@@ -51,30 +53,38 @@ classdef tdt < handle
 %       noise1RMS / noise2RMS - the RMS value of the background noise (in V)
 %
 %       status: a status string describing the current state of the circuit
+%        
+%       stimSize: size (in samples) of the stimulus loaded on the TDT
+%       
+%       nChans: the number of playback channels (either 1 or 2)
 %
-%       User-facing methods; (type "help tdt.<function_name>" for a full
-%       description, where <function_name> is one of the following:
+%   User-facing methods; (type "help tdtObj.<function_name>" for a full
+%   description, where <function_name> is one of the following:
 %
-%       load_stimulus 
-%       play
-%       pause
-%       rewind 
-%       reset
-%       send_event
-%       get_current_sample
+%       load_stimulus(audioData, [triggerInfo = [1,1] ])
 %
-% Important note: a 5 ms cosine on/off ramp is applied to the stimulus by
-% default to enable dynamic control of play/pause without clicking sounds. This
-% corresponds to 245 samples at the 48828.125 Hz sample rate. If your stimuli
-% are already ramped or you do not want a ramp applied, prepend 245 0s at the
-% beginning of your stimulus, and append 245 0s at the end of your stimulus.
+%       play([stopAfter = obj.stimSize])
+%
+%       play_blocking([stopAfter = obj.stimSize])
+%
+%       pause()
+%
+%       rewind()
+%
+%       reset()
+%
+%       send_event(integerEventValue)
+%
+%       get_current_sample([consistencyCheck = true])
+%
+%       set_noise_level(noiseLevelVector)
+%
 %
 % Version 1.1 (2015-04-06) 
 % Auditory Neuroscience Lab, Boston University
 % Contact: lennyv_at_bu_dot_edu
 
     properties(SetAccess = 'private', GetAccess='public')
-        RP
         sampleRate
         channel1Scale
         channel2Scale
@@ -83,12 +93,13 @@ classdef tdt < handle
         status
         stimSize
         nChans
+        trigDuration
     end
     
     properties(Access='private')
+        RP
         f1
         bufferSize
-        trigDuration
     end
 
     methods
@@ -340,7 +351,8 @@ classdef tdt < handle
             
             % reset buffer indexing and zeroTag everything
             obj.reset_buffers(true)
-            obj.RP.SetTagVal('stimSize', size(audioData, 1)+1);
+            % size + 1 is intentional on next line
+            obj.RP.SetTagVal('stimSize', size(audioData, 1)+1); 
             obj.stimSize = size(audioData, 1);
             
             fprintf('Writing to channel 1 buffer...\n')
@@ -390,6 +402,10 @@ classdef tdt < handle
         %
         % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
 
+            if obj.stimSize == 0
+                error(['No stimulus loaded.']
+            end
+
             if nargin < 2
                 stopAfter = obj.stimSize;
             end
@@ -423,16 +439,28 @@ classdef tdt < handle
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
         
-        function play_blocking(obj)
-        % tdt.play_blocking()
+        function play_blocking(obj, stopAfter)
+        % tdt.play_blocking(stopAfter)
         %
         % Plays the contents of the audio buffers on the TDT and holds up
-        % Matlab execution.
+        % Matlab execution while doing so.
+        %
+        % Inputs:
+        % --------------------------------------------------------------------
+        % stopAfter - the sample number at which playback should cease. If not
+        % specified, playback will continue until the end of the stimulus is 
+        % reached.
         %
         % version added: 1.1
         % last updated: 2015-04-06, LAV, lennyv_at_bu_dot_edu
-            
-            stopAfter = obj.stimSize;
+
+            if obj.stimSize == 0
+                error(['No stimulus loaded.']
+            end
+
+            if nargin == 1
+                stopAfter = obj.stimSize;
+            end
             
             if stopAfter < obj.get_current_sample()
                 error(['Buffer index already passed desired stop point. ' ...
@@ -493,7 +521,8 @@ classdef tdt < handle
         function send_event(obj, eventVal)
         % tdt.send_event(eventVal)
         %
-        % Sends an arbitrary integer event to the digital out port on the TDT. 
+        % Sends an arbitrary integer event to the digital out port on the TDT.
+        % Timing will not be sample-locked in any way.
         %
         % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
         
@@ -596,6 +625,8 @@ classdef tdt < handle
                 obj.RP.ZeroTag('audioChannel2');
                 obj.RP.ZeroTag('triggerIdx');
                 obj.RP.ZeroTag('triggerVals');
+                obj.RP.SetTagVal('stopSample', 0);
+                obj.RP.SetTagVal('stimSize', 1);
                 obj.stimSize = 0;
             end
             
