@@ -476,7 +476,7 @@ classdef tdt < handle
             fprintf('Playing stimulus in blocking mode...')
             try
                 currentSample = obj.RP.GetTagVal('chan1BufIdx');
-                while currentSample < obj.stimSize
+                while currentSample < stopAfter 
                     currentSample = obj.RP.GetTagVal('chan1BufIdx');
                     pause(0.1);
                 end
