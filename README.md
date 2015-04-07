@@ -14,7 +14,7 @@ Features:
 
 * Supports up to 8,384,200 samples (1-channel mode) with up to ~3000 events.
 
-Peak DSP cycle usage at 48 kHz with buffers being accessed is approximately 85%.
+The peak DSP cycle usage at 48 kHz is ~85% when memory buffers are being accessed.
 
 Example usage
 --------------
