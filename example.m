@@ -59,8 +59,8 @@ myTDT.load_stimulus(x, trigInfo);
 
 %% Playback examples
 
-% play the entire duration; this is non-blocking
 myTDT.play_blocking();
+myTDT.rewind();
 
 % play the first 10000 samples while blocking and stop
 myTDT.play_blocking(10000);

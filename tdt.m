@@ -80,7 +80,7 @@ classdef tdt < handle
 %       set_noise_level(noiseLevelVector)
 %
 %
-% Version 1.1 (2015-04-06) 
+% Version 1.1 (2015-04-07) 
 % Auditory Neuroscience Lab, Boston University
 % Contact: lennyv_at_bu_dot_edu
 
@@ -403,7 +403,7 @@ classdef tdt < handle
         % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
 
             if obj.stimSize == 0
-                error(['No stimulus loaded.']
+                error(['No stimulus loaded.'])
             end
 
             if nargin < 2
@@ -455,7 +455,7 @@ classdef tdt < handle
         % last updated: 2015-04-06, LAV, lennyv_at_bu_dot_edu
 
             if obj.stimSize == 0
-                error(['No stimulus loaded.']
+                error(['No stimulus loaded.'])
             end
 
             if nargin == 1
