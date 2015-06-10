@@ -17,7 +17,10 @@ classdef tdt < handle
 %
 % scaling: controls the bounds defining full scale, in volts. Specify as a 2
 % element vector for different scaling per channel. On the RP2, this should not
-% exceed 10 V.
+% exceed 10 V. If one number is specified, then this scaling value is used for
+% both channels. Note: Even when paradigmType=='playback_1channel', a
+% two-element vector can be specified; this is because the noise in the
+% opposite ear can still be played.
 % 
 % trigDuration: the duration, in seconds, that each event signal should last.
 % Default: 5E-3 s
@@ -28,7 +31,10 @@ classdef tdt < handle
 % default).
 %
 % figNum: by default, creates the ActiveX figure as figure number 99999;
-% specify an integer argument if for some reason you want another value.
+% specify an integer argument if for some reason you want another value. There
+% is no good reason to change this setting, unless you have a figure number
+% 99999 used for something else in your code (or this value conflicts with some
+% other dummy figure in another software package).
 %
 %
 % Outputs:
@@ -38,8 +44,6 @@ classdef tdt < handle
 %   methods:
 %
 %   Properties:
-%
-%       RP - the "usual" RP object from which TDT functions are accessed.
 %
 %       sampleRate - the real sample rate at which the RP2/RP2.1 operates
 %
@@ -57,6 +61,9 @@ classdef tdt < handle
 %       stimSize: size (in samples) of the stimulus loaded on the TDT
 %       
 %       nChans: the number of playback channels (either 1 or 2)
+%
+%       trigDuration: the duration of a digital event sent via the digital out
+%       port on the RP2.1
 %
 %   User-facing methods; (type "help tdtObj.<function_name>" for a full
 %   description, where <function_name> is one of the following:
@@ -80,7 +87,7 @@ classdef tdt < handle
 %       set_noise_level(noiseLevelVector)
 %
 %
-% Version 1.1 (2015-04-07) 
+% Version 1.2 (2015-06-09) 
 % Auditory Neuroscience Lab, Boston University
 % Contact: lennyv_at_bu_dot_edu
 
@@ -123,10 +130,14 @@ classdef tdt < handle
 
             %%% voltage scaling
             if nargin < 3 
-                error('Scaling must be specified for each output channel.')
+                error('Scaling must be specified.')
+            end
+           
+            % by default, set scaling equal on both channels
+            if length(scaling) < 2
+                scaling(2) = scaling(1);
             end
 
-            %%% control the background noise type
             if nargin < 4 || isempty(trigDuration)
                trigDuration = 5E-3; % s
             end
@@ -141,6 +152,7 @@ classdef tdt < handle
             end
             
             noiseAmpVolts = 10.^(noiseAmpDB ./ 20);
+            
 
             if nargin < 6 || isempty(figNum)
                 figNum = 99999;
@@ -161,7 +173,6 @@ classdef tdt < handle
             %Loads the appropriate circuit, with a quick binary check to ensure
             %file versions are correct
             if strcmpi(paradigmType, 'playback_1channel')
-                % idiotproofing
                 obj.nChans = 1;
                 obj.bufferSize = 8.3842E6;
             elseif strcmpi(paradigmType, 'playback_2channel')
@@ -187,8 +198,7 @@ classdef tdt < handle
             
             % trigger duration (fixed)
             obj.trigDuration = trigDuration;
-            obj.RP.SetTagVal('triggerDuration', 1000 * obj.trigDuration)
-
+            obj.RP.SetTagVal('triggerDuration', 1000 * obj.trigDuration);
 
             % scaling factors and RMS levels
             obj.channel1Scale = single(scaling(1));
@@ -201,6 +211,7 @@ classdef tdt < handle
                             obj.channel1Scale;
             obj.noise2RMS = single(noiseAmpVolts(2)) * ...
                             obj.channel2Scale;
+
             % as per TDT documentation on "GaussNoise" component
             if (obj.noise1RMS > 2.1) || (obj.noise2RMS > 2.1)
                 error('Noise RMS is too high. Clipping will occur.')
@@ -249,7 +260,8 @@ classdef tdt < handle
         %
         % function to load stimulus and triggers to TDT circuit.
         %
-        % audioData: a 2D array specifying audio data ** See note 1
+        % audioData: a 1D or 2D column array specifying audio data ** See note
+        % 1
         %
         % triggerInfo: an n x 2 array specifying index and value tuples to send
         % a digital "word" value at the specified sample of playback. ** see
@@ -271,16 +283,12 @@ classdef tdt < handle
         % should be specified in seconds. It should be obvious that the values
         % need to be non-negative.
         %
-        % last updated: 2015-04-03, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-06-09, LAV, lennyv_at_bu_dot_edu
             
             
             %%%%%%%%%%%%%%%%%%%%
             % input validation %
             %%%%%%%%%%%%%%%%%%%%
-            
-            if size(audioData, 1) > obj.bufferSize
-                error('Audio data exceeds maximum buffer size.')
-            end
 
             if nargin < 3
                 triggerInfo = [];
@@ -289,9 +297,9 @@ classdef tdt < handle
                     (length(size(triggerInfo)) ~= 2) || ...
                     any(triggerInfo(:) < 0)
             
-                    error(['Trigger info must be specified as',...
-                          '[idx, val], array, and the values '...
-                          'should all be positive.'])
+                    error(['triggerInfo must be specified as ',...
+                           '[idx, val], array, and the values '...
+                           'should all be positive.'])
                 end
             end
             
@@ -304,16 +312,22 @@ classdef tdt < handle
             % stimulus size checks
 
             if size(audioData, 1) > obj.bufferSize
-                error(['Stimulus should be <= %d samples long.' ...
-                       'Shorten the stimulus and try again.'], obj.bufferSize)
+                error(['Stimulus should be <= %d samples long. ' ...
+                       'Shorten the stimulus and try again.'], ...
+                       obj.bufferSize)
             end
             
-            if size(triggerInfo, 1) > 2198
-                error(['Stimulus should be <= %d samples long.' ...
-                       'Shorten the stimulus and try again.'], obj.bufferSize)
+            if size(audioData, 2) ~= obj.nChans
+                error(['Number of columns in audioData should ' ...
+                       'match number of channels specified (%d)'], ...
+                       obj.nChans)
             end
             
-
+            if size(triggerInfo, 1) > 2197
+                error(['Circuit can only support a maximum of 2197 ', ...
+                       'trigger values. Reduce the number of ', ...
+                       'triggers specified in triggerInfo.'])
+            end
 
             if ~isempty(triggerInfo)
                 triggerIdx = int32(triggerInfo(:, 1));
@@ -324,7 +338,7 @@ classdef tdt < handle
                 triggerVals = int32(1);
             end
             
-            if  any(triggerVals < 0)
+            if any(triggerVals < 0)
                 error('Trigger values should be non-negative.')
             end
             
@@ -438,7 +452,8 @@ classdef tdt < handle
             currentSample = obj.get_current_sample();
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
-        
+       
+
         function play_blocking(obj, stopAfter)
         % tdt.play_blocking(stopAfter)
         %
@@ -490,7 +505,6 @@ classdef tdt < handle
         end
 
 
-        
         function rewind(obj)
         % tdt.rewind()
         %
@@ -503,8 +517,8 @@ classdef tdt < handle
             currentSample = obj.get_current_sample();
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
+       
 
-        
         function reset(obj)
         % tdt.reset()
         %
@@ -533,7 +547,8 @@ classdef tdt < handle
             pause(0.01);
             obj.RP.SoftTrg(4);
         end
-        
+       
+
         function set_noise_level(obj, noiseAmpDB)
         % tdt.set_noise_level(noiseAmpDB)
         %
@@ -562,7 +577,8 @@ classdef tdt < handle
             obj.noise2RMS = newNoise2RMS;
             pause(0.1);
         end
-            
+        
+
         function [currentSample1, trigBufSample1] = get_current_sample(obj, checks)
         % [audioIdx, triggerIdx] = tdt.get_current_sample(checks)
         %
@@ -600,7 +616,8 @@ classdef tdt < handle
             end
         end
     end
-    
+   
+
     methods(Access='private')
         function reset_buffers(obj, clearBuffer)
         % tdt.reset_buffers(clearBuffer)
@@ -659,4 +676,3 @@ classdef tdt < handle
         
     end
 end
-
