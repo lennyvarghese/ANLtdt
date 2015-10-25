@@ -1,6 +1,6 @@
 classdef tdt < handle
 % tdtObject = tdt(paradigmType, sampleRate, scaling, trigDuration, ...
-%                 noiseAmp, figNum=99999)
+%                 figNum=99999)
 %
 % Creates a new tdt object.
 % 
@@ -8,8 +8,8 @@ classdef tdt < handle
 % ----------------------------------------------------------------------------
 %
 % paradigmType: 'playback_1channel' or 'playback_2channel'. 
-%    playback_1channel: one-channel stimuli up to 8.3842E6 samples
-%    playback_2channel: two-channel stimuli up to 4.1921E6 samples
+%    playback_1channel: one-channel stimuli up to 8.38E6 samples
+%    playback_2channel: two-channel stimuli up to 4.19E6 samples
 %
 % requestedSampleRate: must be 48, 24, or 12, for 48828.125 Hz, 24414.0625 Hz,
 % or 12207.03125 Hz, respectively. Please make note of the non-standard sample
@@ -24,11 +24,6 @@ classdef tdt < handle
 % 
 % trigDuration: the duration, in seconds, that each event signal should last.
 % Default: 5E-3 s
-%
-% noiseAmp: the RMS amplitude of the noise relative to 1V RMS, in dB; e.g.,
-% noiseRMSVoltage = 10^(noiseAmpInDecibels / 20). The actual output RMS depends
-% on the value set for "scaling". Accepts -Inf as an input for no noise (the
-% default).
 %
 % figNum: by default, creates the ActiveX figure as figure number 99999;
 % specify an integer argument if for some reason you want another value. There
@@ -53,8 +48,6 @@ classdef tdt < handle
 %
 %       channel1Scale / channel2Scale - the scaling value x mapping floating
 %       point values between [-1,1] to [-x,x] for channel 1/2 (in Volts)
-%
-%       noise1RMS / noise2RMS - the RMS value of the background noise (in V)
 %
 %       status: a status string describing the current state of the circuit
 %        
@@ -84,10 +77,7 @@ classdef tdt < handle
 %
 %       get_current_sample([consistencyCheck = true])
 %
-%       set_noise_level(noiseLevelVector)
-%
-%
-% Version 1.2 (2015-06-09) 
+% Version 1.3 (2015-10-24) 
 % Auditory Neuroscience Lab, Boston University
 % Contact: lennyv_at_bu_dot_edu
 
@@ -95,8 +85,6 @@ classdef tdt < handle
         sampleRate
         channel1Scale
         channel2Scale
-        noise1RMS
-        noise2RMS
         status
         stimSize
         nChans
@@ -111,7 +99,7 @@ classdef tdt < handle
 
     methods
         function obj = tdt(paradigmType, requestedSampleRate, scaling, ...
-                           trigDuration, noiseAmpDB, figNum)
+                           trigDuration, figNum)
           
             %%% sample rate check
             if nargin < 2
@@ -135,26 +123,18 @@ classdef tdt < handle
            
             % by default, set scaling equal on both channels
             if length(scaling) < 2
-                scaling(2) = scaling(1);
+                if strcmpi(paradigmType, 'playback_2channel')
+                    scaling(2) = scaling(1);
+                else
+                    scaling(2) = 0;
+                end
             end
 
             if nargin < 4 || isempty(trigDuration)
                trigDuration = 5E-3; % s
             end
 
-            %%% control the background noise amplitude (dbFS)
-            if nargin < 5 || isempty(noiseAmpDB)
-                noiseAmpDB = [-Inf, -Inf];
-            end
-            
-            if length(noiseAmpDB) < 2
-                noiseAmpDB(2) = noiseAmpDB(1);
-            end
-            
-            noiseAmpVolts = 10.^(noiseAmpDB ./ 20);
-            
-
-            if nargin < 6 || isempty(figNum)
+            if nargin < 5 || isempty(figNum)
                 figNum = 99999;
             end
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -174,22 +154,22 @@ classdef tdt < handle
             %file versions are correct
             if strcmpi(paradigmType, 'playback_1channel')
                 obj.nChans = 1;
-                obj.bufferSize = 8.3842E6;
+                obj.bufferSize = 8.38E6;
             elseif strcmpi(paradigmType, 'playback_2channel')
                 obj.nChans = 2;
-                obj.bufferSize = 4.1921E6;
+                obj.bufferSize = 4.19E6;
             else
                 error('paradigm type is currently unsupported.')
             end
             
-            load(['bin/' paradigmType '.mat'])
-            fileID = fopen(['bin/' paradigmType '.rcx']);
-            temp = fread(fileID, Inf, 'int32=>int32');
-            fclose(fileID);
-            if any(size(temp) ~= size(binInfo)) || any(temp ~= binInfo)
-                error('Version mismatch between .m and .rcx files.')
-            end
-            obj.RP.LoadCOFsf(['bin/' paradigmType '.rcx'], rateTag);
+            %load(['bin/' paradigmType '.mat'])
+            %fileID = fopen(['bin/' paradigmType '_button.rcx']);
+            %temp = fread(fileID, Inf, 'int32=>int32');
+            %fclose(fileID);
+            %if any(size(temp) ~= size(binInfo)) || any(temp ~= binInfo)
+            %    error('Version mismatch between .m and .rcx files.')
+            %end
+            obj.RP.LoadCOFsf(['bin/' paradigmType '_button.rcx'], rateTag);
 
             % store some relevant info in the object itself
 
@@ -205,21 +185,6 @@ classdef tdt < handle
             obj.channel2Scale = single(scaling(2));
             obj.RP.SetTagVal('chan1Scaler', obj.channel1Scale);
             obj.RP.SetTagVal('chan2Scaler', obj.channel2Scale);
-
-            % noise
-            obj.noise1RMS = single(noiseAmpVolts(1)) * ...
-                            obj.channel1Scale;
-            obj.noise2RMS = single(noiseAmpVolts(2)) * ...
-                            obj.channel2Scale;
-
-            % as per TDT documentation on "GaussNoise" component
-            if (obj.noise1RMS > 2.1) || (obj.noise2RMS > 2.1)
-                error('Noise RMS is too high. Clipping will occur.')
-            end
-            obj.RP.SetTagVal('chan1NoiseAmp', obj.noise1RMS);
-            obj.RP.SetTagVal('chan2NoiseAmp', obj.noise2RMS);
-            obj.RP.SetTagVal('chan1NoiseSeed', randi(2^15));
-            obj.RP.SetTagVal('chan2NoiseSeed', randi(2^15));
 
             % zero tag the relevant buffers
             obj.RP.ZeroTag('audioChannel1');
@@ -245,10 +210,6 @@ classdef tdt < handle
                  obj.channel1Scale, obj.channel1Scale);
             fprintf('Channel 2, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel2Scale, obj.channel2Scale);
-            fprintf('Channel 1, masking noise RMS (V) = %2.4f\n', ...
-                 obj.channel1Scale * obj.noise1RMS);
-            fprintf('Channel 2, masking noise RMS (V) = %2.4f\n', ...
-                 obj.channel2Scale * obj.noise2RMS);
              
             obj.stimSize = 0;
             obj.status = sprintf('No stimulus loaded.');
@@ -283,7 +244,7 @@ classdef tdt < handle
         % should be specified in seconds. It should be obvious that the values
         % need to be non-negative.
         %
-        % last updated: 2015-06-09, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-06-09, LV, lennyv_at_bu_dot_edu
             
             
             %%%%%%%%%%%%%%%%%%%%
@@ -402,7 +363,6 @@ classdef tdt < handle
             fprintf('Stimulus loaded.\n')
         end
 
-
         function play(obj, stopAfter)
         % tdt.play(stopAfter)
         %
@@ -414,7 +374,7 @@ classdef tdt < handle
         % specified, playback will continue until the end of the stimulus is 
         % reached.
         %
-        % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-03-11, LV, lennyv_at_bu_dot_edu
 
             if obj.stimSize == 0
                 error(['No stimulus loaded.'])
@@ -442,7 +402,7 @@ classdef tdt < handle
         %
         % Pauses playback on the TDT.
         %
-        % last updated: 2015-04-03, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-04-03, LV, lennyv_at_bu_dot_edu
             
             stat = obj.RP.SetTagVal('stopSample', 0);
             if ~stat
@@ -467,7 +427,7 @@ classdef tdt < handle
         % reached.
         %
         % version added: 1.1
-        % last updated: 2015-04-06, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-04-06, LV, lennyv_at_bu_dot_edu
 
             if obj.stimSize == 0
                 error(['No stimulus loaded.'])
@@ -511,7 +471,7 @@ classdef tdt < handle
         % Rewinds the buffer without clearing it. Useful when new audio
         % does not need to be loaded into the TDT.
         %
-        % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-03-11, LV, lennyv_at_bu_dot_edu
         
             obj.reset_buffers(false);
             currentSample = obj.get_current_sample();
@@ -524,7 +484,7 @@ classdef tdt < handle
         %
         % Rewinds the buffer and sets all values in the buffer to 0. 
         %
-        % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-03-11, LV, lennyv_at_bu_dot_edu
 
             obj.reset_buffers(true);
             obj.stimSize = 0;
@@ -538,7 +498,7 @@ classdef tdt < handle
         % Sends an arbitrary integer event to the digital out port on the TDT.
         % Timing will not be sample-locked in any way.
         %
-        % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-03-11, LV, lennyv_at_bu_dot_edu
         
             statusVal = obj.RP.SetTagVal('arbitraryEvent', eventVal);
             if ~statusVal
@@ -547,38 +507,31 @@ classdef tdt < handle
             pause(0.01);
             obj.RP.SoftTrg(4);
         end
-       
-
-        function set_noise_level(obj, noiseAmpDB)
-        % tdt.set_noise_level(noiseAmpDB)
-        %
-        % Controls the noise levels in each ear. Specify noiseAmpDB as a scalar
-        % to set both channels to the same value, or a 2-element vector. Set 
-        % the value of a channel to -Inf to turn noise off.
-        %
-        % Version added: 1.1
-        %
-        % last updated: 2015-03-30, LAV, lennyv_at_bu_dot_edu
         
-            if length(noiseAmpDB) < 2
-                noiseAmpDB(2) = noiseAmpDB(1);
-            end
-            
-            noiseAmpVolts = 10.^(noiseAmpDB ./ 20);
+        function [pressVals, pressSamples] = get_button_presses(obj)
+           % [pressVals, pressSamples] = tdt.get_button_presses()
+           %
+           % retrieves button press values and the sample that each press
+           % occurred relative to the start of playback
+           %
+           % note: will only store 1999 button presses without requiring the
+           % reset() function to be called due to the size limitation on the 
+           % button information storage buffers. Until reset() is called, 
+           % subsequent button presses will not be recorded
+           %
+           % last updated: 2015-10-24 LV, lennyv_at_bu_dot_edu
 
-            newNoise1RMS = single(noiseAmpVolts(1)) * ...
-                               obj.channel1Scale;
-            newNoise2RMS = single(noiseAmpVolts(2)) * ...
-                                   obj.channel2Scale;
-                               
-            obj.RP.SetTagVal('chan1NoiseAmp', newNoise1RMS);
-            obj.noise1RMS = newNoise1RMS;
-            obj.RP.SetTagVal('chan2NoiseAmp', newNoise2RMS);
-            obj.noise2RMS = newNoise2RMS;
-            pause(0.1);
+           nPress = obj.RP.GetTagVal('nPress')
+
+           if nPress > 0
+               pressVals = obj.RP.ReadTagVEX('buttonPressVals',0, ...
+                                             nPress, 'I16', 'F64', 1);
+               pressSamples = obj.RP.ReadTagVEX('buttonPressSamples', 0,...
+                                                nPress, 'I16', 'F64', 1);
+           end
+            
         end
         
-
         function [currentSample1, trigBufSample1] = get_current_sample(obj, checks)
         % [audioIdx, triggerIdx] = tdt.get_current_sample(checks)
         %
@@ -588,7 +541,8 @@ classdef tdt < handle
         % An error is raised if the audio buffers or the trigger buffers become
         % misaligned.
         %
-        % last updated: 2015-04-03, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-04-03, LV, lennyv_at_bu_dot_edu
+
             if nargin == 1
                 checks = true;
             end
@@ -632,7 +586,7 @@ classdef tdt < handle
         % setting them to 0. Otherwise just resets the all buffer indexing to
         % 0.
         %
-        % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu           
+        % last updated: 2015-03-11, LV, lennyv_at_bu_dot_edu           
             
             obj.RP.SoftTrg(2);
             pause(0.01);
@@ -644,6 +598,8 @@ classdef tdt < handle
                 obj.RP.ZeroTag('triggerVals');
                 obj.RP.SetTagVal('stopSample', 0);
                 obj.RP.SetTagVal('stimSize', 1);
+                obj.RP.ZeroTag('buttonPressValue');
+                obj.RP.ZeroTag('buttonPressSample');
                 obj.stimSize = 0;
             end
             
@@ -664,7 +620,7 @@ classdef tdt < handle
         % cleanly back out and close the TDT when the object is deleted. Not
         % meant to be called by the user.
         %
-        % last updated: 2015-03-11, LAV, lennyv_at_bu_dot_edu
+        % last updated: 2015-03-11, LV, lennyv_at_bu_dot_edu
 
             obj.reset_buffers(true);
             obj.RP.Halt;
