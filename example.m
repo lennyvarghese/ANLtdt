@@ -1,29 +1,28 @@
 %% Initialization and clean shutdown examples
-% updated for version 1.2
+% updated for version 1.3
 
 % set max/min on channels to 0.1 V; no background noise, default trigger
-% durations (5 ms), 24 kHz sample rate
-myTDT = tdt('playback_1channel', 24, 0.1, [], -Inf);
+% durations (5 ms) and button hold durations (200 ms) 24 kHz sample rate
+myTDT = tdt('playback_1channel', 24, 0.1, [], []);
 pause(1)
 clear myTDT
 
 % set channel scaling to 0.2V in left channel, 0.3V in right channel; set
-% trigger durations to 10 ms; sample rate 48Khz; opposite-ear masking noise at
-% -60 dB.
-myTDT = tdt('playback_1channel', 48, [0.2, 0.3], 0.01, [-Inf, -60]);
+% trigger durations to 10 ms, and button hold duration to 100 ms; sample rate 
+% 48Khz
+myTDT = tdt('playback_1channel', 48, [0.2, 0.3], 0.01, 0.1);
 pause(1);
 clear myTDT
 
 % set both channels' scaling to 1.1 V, 1 ms trigger durations, turn on continuous
-% background noise at -70 dB re: 1V RMS; wait 1 second, then clear the object.
-myTDT = tdt('playback_2channel', 48, 1.1, 1E-3, -70);
+% wait 1 second, then clear the object.
+myTDT = tdt('playback_2channel', 48, 1.1, 1E-3);
 pause(1);
 clear myTDT
 
 % set channel scaling to 1.1V in channel 1 and 1.0V in channel 2, 1 ms trigger
-% durations, turn on continuous background noise in right ear at -60 dB re: 1V
-% RMS but no noise in the other ear.  
-myTDT = tdt('playback_2channel', 48, [1.1, 1], 1E-3, [-Inf, -60]);
+% durations 
+myTDT = tdt('playback_2channel', 48, [1.1, 1], 1E-3);
 pause(1);
 clear myTDT
 
@@ -31,7 +30,7 @@ clear myTDT
 
 %% Stimulus creation and transfer to TDT
 
-myTDT = tdt('playback_2channel', 24, [1, 1], 1E-3, [-Inf, -20]);
+myTDT = tdt('playback_2channel', 24, [1, 1], 1E-3);
 
 % create a stimulus
 t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
@@ -55,10 +54,15 @@ myTDT.load_stimulus(x, trigInfo);
 %% Playback examples
 
 myTDT.play_blocking();
+% pull any button presses that occurred during playback
+[buttonPresses, buttonPressSamples] = myTDT.get_button_presses();
 myTDT.rewind();
 
 % play the first 10000 samples while blocking and stop
 myTDT.play_blocking(10000);
+
+% pull any button presses that occurred since the last rewind
+[buttonPresses, buttonPressSamples] = myTDT.get_button_presses();
 
 % rewind and clear buffers
 myTDT.reset();
@@ -75,4 +79,4 @@ myTDT.pause();
 pause(0.5);
 myTDT.play(40000)
 pause(1);
-myTDT
+myTDT.get_current_sample()
