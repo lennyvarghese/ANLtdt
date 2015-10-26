@@ -33,7 +33,7 @@ classdef tdt < handle
 % trigDuration: the duration, in seconds, that each event signal should last.
 % Default: 5E-3 s
 %
-% buttonHoldDuration: the duration, in ms, that is required before a continuous
+% buttonHoldDuration: the duration, in s, that is required before a continuous
 % button press registers as a new event. e.g., if a button is held down for 
 % 0.3s, buttonHoldDuration = 0.2, two button presses will be registered. If
 % buttonHoldDuration = 0.090, four button presses should be registered (t = 0, 
