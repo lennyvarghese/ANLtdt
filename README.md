@@ -59,3 +59,5 @@ Version history:
 
 v1.3: Added button box functionality; removed noise functionality. Fixed a
 small bug in play_blocking that would cause Matlab to hang.
+
+v1.4: Fixed bug which prevented "normally-closed" button box inputs from registering properly.
