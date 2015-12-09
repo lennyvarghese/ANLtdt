@@ -1,5 +1,5 @@
 %% Initialization and clean shutdown examples
-% updated for version 1.3
+% updated for version 1.5
 
 % set max/min on channels to 0.1 V; no background noise, default trigger
 % durations (5 ms) and button hold durations (200 ms) 24 kHz sample rate
@@ -16,7 +16,8 @@ clear myTDT
 
 % set both channels' scaling to 1.1 V, 1 ms trigger durations, turn on continuous
 % wait 1 second, then clear the object.
-myTDT = tdt('playback_2channel', 48, 1.1, 1E-3);
+% use the "16bit" version of the 2-channel circuit
+myTDT = tdt('playback_2channel_16bit', 48, [1.1, 1.1], 1E-3);
 pause(1);
 clear myTDT
 
@@ -80,3 +81,58 @@ pause(0.5);
 myTDT.play(40000)
 pause(1);
 myTDT.get_current_sample()
+pause(2);
+clear myTDT;
+
+%% some timing tests 
+% (how long it takes to load a 10s stimulus to the TDT using various
+% paradigm settings)
+
+disp('Using 48.8 kHz, 32 bit data transfer')
+myTDT = tdt('playback_2channel', 48, [1, 1], 1E-3);
+% create a stimulus
+t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
+chan1Stim = sin(2*pi*1000*t);
+chan2Stim = zeros(size(chan1Stim));
+x = [chan1Stim', chan2Stim'];
+
+tic
+myTDT.load_stimulus(x);
+toc
+clear myTDT
+
+disp('Using 48.8 kHz, 16 bit data transfer')
+myTDT = tdt('playback_2channel_16bit', 48, [1, 1], 1E-3);
+% create a stimulus
+t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
+chan1Stim = sin(2*pi*1000*t);
+chan2Stim = zeros(size(chan1Stim));
+x = [chan1Stim', chan2Stim'];
+tic
+myTDT.load_stimulus(x);
+toc
+clear myTDT
+
+disp('Using 24.4 kHz, 32 bit data transfer')
+myTDT = tdt('playback_2channel', 24, [1, 1], 1E-3);
+% create a stimulus
+t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
+chan1Stim = sin(2*pi*1000*t);
+chan2Stim = zeros(size(chan1Stim));
+x = [chan1Stim', chan2Stim'];
+tic
+myTDT.load_stimulus(x);
+toc
+clear myTDT
+
+disp('Using 24.4 kHz, 16 bit data transfer')
+myTDT = tdt('playback_2channel_16bit', 24, [1, 1], 1E-3);
+% create a stimulus
+t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
+chan1Stim = sin(2*pi*1000*t);
+chan2Stim = zeros(size(chan1Stim));
+x = [chan1Stim', chan2Stim'];
+tic
+myTDT.load_stimulus(x);
+toc
+clear myTDT
