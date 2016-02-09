@@ -118,7 +118,7 @@ classdef tdt < handle
 %  >> help myTDT.play_blocking
 %
 % -----------------------------------------------------------------------------
-% Version 1.6 (2016-02-08) 
+% Version 1.5 (2016-02-09) 
 % Auditory Neuroscience Lab, Boston University
 % Contact: lennyv_at_bu_dot_edu
 
