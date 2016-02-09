@@ -118,7 +118,7 @@ classdef tdt < handle
 %  >> help myTDT.play_blocking
 %
 % -----------------------------------------------------------------------------
-% Version 1.5 (2015-12-09) 
+% Version 1.6 (2016-02-08) 
 % Auditory Neuroscience Lab, Boston University
 % Contact: lennyv_at_bu_dot_edu
 
@@ -317,11 +317,10 @@ classdef tdt < handle
         % values will vary by device; e.g., on the RP2, values should be <=
         % 255, corresponding to the 8 bit precision of the digital output. If a
         % value is > 255, only the least significant 8 bits are used. Duration 
-        % should be specified in seconds. It should be obvious that the values
-        % need to be non-negative.
+        % should be specified in seconds. Trigger values and index values
+        % should be non-negative.
         %
-        % last updated: 2015-06-09, LV, lennyv_at_bu_dot_edu
-            
+        % last updated: 2016-02-08, LV, lennyv_at_bu_dot_edu
             
             %%%%%%%%%%%%%%%%%%%%
             % input validation %
@@ -401,20 +400,25 @@ classdef tdt < handle
             %%%%%%%%%%%%%%%%%%%%%
            
             % hack - the WriteTagVEX methods don't like single value inputs
-            % also correct for 1 sample difference in index
-            triggerIdx = [triggerIdx - 1; -1];
+            % also correct for 1 sample difference in index but add 1 back to
+            % account for one sample zero padding at beginning...so +1 -1
+            % cancel out
+            triggerIdx = [triggerIdx; - 1];
             triggerVals = [triggerVals; 0];
             
             % reset buffer indexing and zeroTag everything
             obj.reset_buffers(true)
-            % size + 1 is intentional on next line
-            obj.RP.SetTagVal('stimSize', size(audioData, 1)+1); 
-            obj.stimSize = size(audioData, 1);
-            
+            % size +2/+1 are intentional on next lines
+            obj.RP.SetTagVal('stimSize', size(audioData, 1)+2); 
+            obj.stimSize = size(audioData, 1) + 1;
+
+
+            % note: 0 padding below appears to eliminate the clicking noise
+            % when buffers are written to or accessed - LV 2016-02-08
             if ~strcmpi(obj.paradigmType, 'playback_2channel_16bit')
                 fprintf('Writing to channel 1 buffer...\n')
                 curStatus = obj.RP.WriteTagVEX('audioChannel1', 0, 'F32',...
-                                                audioData(:, 1));
+                                                [0; audioData(:, 1)]);
                 if ~curStatus
                     error('Error writing to audioChannel1 buffer.')
                 end
@@ -422,7 +426,7 @@ classdef tdt < handle
                 if obj.nChans == 2
                     fprintf('Writing to channel 2 buffer...\n')
                     curStatus = obj.RP.WriteTagVEX('audioChannel2', 0, 'F32',...
-                                                audioData(:, 2));
+                                                [0; audioData(:, 2)]);
                     if ~curStatus
                         error('Error writing to audioChannel2 buffer.')
                     end
@@ -430,7 +434,7 @@ classdef tdt < handle
             else
                 fprintf('Writing 2 channels to audio buffer...\n')
                 curStatus = obj.RP.WriteTagVEX('audioChannel1', 0, 'I16',...
-                                                audioData');
+                                                [[0; 0], audioData']);
                 if ~curStatus
                     error('Error writing to audioChannel1 buffer.')
                 end
