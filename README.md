@@ -1,6 +1,6 @@
 # ANL TDT playback code
 
-Code for straightforward audio playback + event sending via TDT RP2.1 system.
+Code for straightforward audio playback + event sending via TDT RP2.1 or TDT RZ6 systems.
 Mostly geared towards auditory EEG applications, where it is often useful to
 have an 8-bit word (integer) sent via the digital output at a specified sample.
 
