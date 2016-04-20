@@ -2,7 +2,7 @@
 
 Code for straightforward audio playback + event sending via TDT RP2.1 or TDT RZ6 systems.
 Mostly geared towards auditory EEG applications, where it is often useful to
-have an 8-bit word (integer) sent via the digital output at a specified sample.
+have an 8-bit word (integer) sent via the digital output at a specified playback sample.
 
 Features:
 
@@ -17,13 +17,13 @@ Features:
 * arbitrary event handling (i.e., send any digital value to the TDT at any
   time)
 
-* supports up to 8,380,000 samples (1-channel mode) with up to 2,250 events.
+* supports up to 8,380,000 samples (1-channel mode) with up to 2,250 events. (twice the number of samples for the RZ6, but with the same number of possible events)
 
 * supports TDT button boxes (inputs 1-4), and returns button presses and
   samples relative to start of audio playback, facilitating accurate reaction 
   time computations
 
-The peak DSP cycle usage at 48 kHz is ~90% when memory buffers are being
+When using the RP2.1, The peak DSP cycle usage at 48 kHz is ~90% when memory buffers are being
 accessed.
 
 Example usage
@@ -63,3 +63,5 @@ small bug in play_blocking that would cause Matlab to hang.
 v1.4: Fixed bug which prevented "normally-closed" button box inputs from registering properly.
 
 v1.5: Added options to allow for speeded TDT communication by using 16-bit stimuli 
+
+v1.6: Added RZ6 support.
