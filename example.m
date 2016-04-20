@@ -1,5 +1,5 @@
 %% Initialization and clean shutdown examples
-% updated for version 1.5
+% updated for version 1.6
 
 % set max/min on channels to 0.1 V; no background noise, default trigger
 % durations (5 ms) and button hold durations (200 ms) 24 kHz sample rate
@@ -56,6 +56,9 @@ myTDT.load_stimulus(x, trigInfo);
 
 myTDT.play_blocking();
 % pull any button presses that occurred during playback
+% note: if this does not return NaN when no buttons were pressed, or if no
+% buttons are connected, then the xor value needs to be changed in the
+% object constructor call.
 [buttonPresses, buttonPressSamples] = myTDT.get_button_presses();
 myTDT.rewind();
 
