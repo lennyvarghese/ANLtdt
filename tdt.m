@@ -572,7 +572,7 @@ classdef tdt < handle
         % specified, playback will continue until the end of the stimulus is 
         % reached.
         %
-        % last updated: 2015-03-11, LV, lennyv_at_bu_dot_edu
+        % last updated: 2016-04-21, LV, lennyv_at_bu_dot_edu
 
             if obj.stimSize == 0
                 error(['No stimulus loaded.'])
@@ -610,7 +610,7 @@ classdef tdt < handle
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
        
-        function play_blocking(obj, stopAfter)
+        function play_blocking(obj, stopAfter, debugMode)
         % tdt.play_blocking(stopAfter)
         %
         % Plays the contents of the audio buffers on the TDT and holds up
@@ -620,50 +620,88 @@ classdef tdt < handle
         % --------------------------------------------------------------------
         % stopAfter - the sample number at which playback should cease. If not
         % specified, playback will continue until the end of the stimulus is 
-        % reached.
+        % reached. Note: buffer positions will automatically reset to 0
+        % after the end fo the stimulus is reached.
+        %
+        % debugMode - if set, display the buffer sample numbers on screen
+        % while Matlab is being held up
         %
         % version added: 1.1
-        % last updated: 2015-04-06, LV, lennyv_at_bu_dot_edu
+        % last updated: 2016-04-21, LV, lennyv_at_bu_dot_edu
 
             if obj.stimSize == 0
-                error(['No stimulus loaded.'])
+                error('No stimulus loaded.')
             end
 
-            if nargin == 1
-                stopAfter = obj.stimSize;
+            if nargin < 2 || isempty(stopAfter)
+                stopAfter = [];
+                stopAfterSample = obj.stimSize;
+            else
+                stopAfterSample = stopAfter;
             end
             
-            if stopAfter < obj.get_current_sample()
+            if nargin < 3 || isempty(debugMode)
+                debugMode = false;
+            end
+            
+            if stopAfterSample < obj.get_current_sample()
                 error(['Buffer index already passed desired stop point. ' ...
                        'Did you mean to rewind the buffer first?'])
             end
             
-            stat = obj.RP.SetTagVal('stopSample', stopAfter);
+            stat = obj.RP.SetTagVal('stopSample', stopAfterSample);
             if ~stat
                 error('Error setting stop sample.')
             end
             
+            currentSample = obj.get_current_sample();
+            fprintf('Playing stimulus in blocking mode...\n');
+            fprintf('    Started playing at sample %d\n', currentSample);
             obj.RP.SoftTrg(1);
-            fprintf('Playing stimulus in blocking mode...')
+            pause(0.01)
             try
                 currentSample = obj.RP.GetTagVal('chan1BufIdx');
-                if nargin == 1
+                if isempty(stopAfter)
+                    if debugMode
+                        fprintf(1, '    Current sample: %08d\n', ....
+                                currentSample);
+                    end
+                    
                     while currentSample > 0 
                         currentSample = obj.RP.GetTagVal('chan1BufIdx');
+                        if debugMode && currentSample
+                                fprintf(1, '\b\b\b\b\b\b\b\b\b%08d\n', ...
+                                        currentSample);
+                        end
                         pause(0.1);
                     end
                 else
-                    while currentSample <= stopAfter 
+                    if debugMode
+                        fprintf(1, '    Current sample: %08d\n', ....
+                                currentSample);
+                    end
+                    while currentSample <= stopAfterSample
                         currentSample = obj.RP.GetTagVal('chan1BufIdx');
+                        if debugMode && currentSample
+                            fprintf(1, '\b\b\b\b\b\b\b\b\b%08d\n', ...
+                                    currentSample);
+                        end
                         pause(0.1);
                     end
                 end
+                fprintf(1, '    Sample %d reached\n', stopAfterSample);
             catch ME
                 obj.pause()
                 fprintf(['\n' obj.status]);
                 throw(ME);
             end
-            fprintf('done.\n')
+            currentSample = obj.get_current_sample();
+            if ~currentSample
+                fprintf(1, ['    All samples played; ', ...
+                            'buffer index reset to 0.\n']);
+            end
+            obj.status = sprintf('stopped at buffer index %d', currentSample);
+            fprintf('...done.\n')
         end
 
         function rewind(obj)
@@ -671,9 +709,9 @@ classdef tdt < handle
         %
         % Rewinds the audio buffer without clearing it, and clears the button
         % pres buffers. Useful when new audio data does not need to be loaded 
-        % into the TDT.
+        % into the TDT (to minimize the communication time between PC and TDT).
         %
-        % last updated: 2015-10-25, LV, lennyv_at_bu_dot_edu
+        % last updated: 2015-04-21, LV, lennyv_at_bu_dot_edu
         
             obj.reset_buffers(false);
             currentSample = obj.get_current_sample();
@@ -759,7 +797,7 @@ classdef tdt < handle
         % An error is raised if the audio buffers or the trigger buffers become
         % misaligned.
         %
-        % last updated: 2015-04-03, LV, lennyv_at_bu_dot_edu
+        % last updated: 2016-04-21, LV, lennyv_at_bu_dot_edu
 
             if nargin == 1
                 checks = true;
@@ -771,8 +809,8 @@ classdef tdt < handle
                 if currentSample1 ~= currentSample2
                     obj.reset_buffers(false);
                     error(['Audio buffers are misaligned (%d/%d.).',...
-                        'Buffers reset, but not cleared.'], ...
-                        currentSample1, currentSample2)
+                           'Buffers reset, but not cleared.'], ...
+                          currentSample1, currentSample2)
                 end
             end
             

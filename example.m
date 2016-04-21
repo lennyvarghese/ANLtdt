@@ -28,9 +28,8 @@ pause(1);
 clear myTDT
 
 
-
 %% Stimulus creation and transfer to TDT
-
+clear myTDT;
 myTDT = tdt('playback_2channel', 24, [1, 1], 1E-3);
 
 % create a stimulus
@@ -51,10 +50,9 @@ trigInfo = [   1,   1;
 % send the stimulus and trigger information to the TDT
 myTDT.load_stimulus(x, trigInfo);
 
-
 %% Playback examples
-
-myTDT.play_blocking();
+% play the entire stimulus (with debug mode on)
+myTDT.play_blocking([], 1);
 % pull any button presses that occurred during playback
 % note: if this does not return NaN when no buttons were pressed, or if no
 % buttons are connected, then the xor value needs to be changed in the
@@ -62,11 +60,15 @@ myTDT.play_blocking();
 [buttonPresses, buttonPressSamples] = myTDT.get_button_presses();
 myTDT.rewind();
 
-% play the first 10000 samples while blocking and stop
-myTDT.play_blocking(10000);
+% play the first 10000 samples while blocking and stop, also with debug
+% mode on
+myTDT.play_blocking(10000, 1);
 
 % pull any button presses that occurred since the last rewind
 [buttonPresses, buttonPressSamples] = myTDT.get_button_presses();
+
+% play the rest of it, with debug mode on
+myTDT.play_blocking([], 1);
 
 % rewind and clear buffers
 myTDT.reset();
