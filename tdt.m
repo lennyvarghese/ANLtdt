@@ -1,6 +1,5 @@
 classdef tdt < handle
 % tdtObject = tdt(paradigmType, sampleRate, scaling, trigDuration=0.005,
-% ...
 %                 buttonHoldDuration=0.2, xorVal=0, figNum=99999)
 %
 % Creates a new object to interact with the TDT RP2.1 or the TDT RZ6.
@@ -137,7 +136,7 @@ classdef tdt < handle
 %   as well; 2) it makes more sense for users to generate their own noise
 %   and combine it with their stimuli in Matlab itself.
 % -----------------------------------------------------------------------------
-% Version 1.6 (2016-04-20) Auditory Neuroscience Lab, Boston University
+% Version 1.6 (2016-04-21) Auditory Neuroscience Lab, Boston University
 % Contact: lennyv_at_bu_dot_edu
 
     properties(SetAccess = 'private', GetAccess='public')
@@ -178,7 +177,7 @@ classdef tdt < handle
             elseif 12 == requestedSampleRate 
                 rateTag = 1;
             else
-                error('invalid sample rate specified (must be 96, 48, 24, 12)')
+                error('invalid sample rate specified (must be 97, 48, 24, 12)')
             end
 
             %%% voltage scaling
@@ -211,7 +210,7 @@ classdef tdt < handle
             end
             
             if nargin < 6 || isempty(xorVal)
-               xorVal = 0; 
+               xorVal = []; 
             end
 
             if nargin < 7 || isempty(figNum)
@@ -345,9 +344,7 @@ classdef tdt < handle
                 obj.RP.SetTagVal('chan2Scaler', obj.channel2Scale);
             end
             
-            % button box xor value
-            obj.RP.SetTagVal('xorVal', xorVal);
-
+            obj.RP.SetTagVal('chan2Scaler', obj.channel2Scale);
             % zero tag the relevant buffers
             obj.RP.ZeroTag('audioChannel1');
             obj.RP.ZeroTag('audioChannel2');
@@ -363,16 +360,22 @@ classdef tdt < handle
                 error('TDT connection error. Try rebooting the TDT.');
             end
             
-            % do an "initial reset" of the buffers to fix indexing on
-            % source buffers
-            obj.RP.SoftTrg(3);
-            
+
             % display some status information to the user
             fprintf('Channel 1, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel1Scale, obj.channel1Scale);
             fprintf('Channel 2, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel2Scale, obj.channel2Scale);
              
+            buttonBoxOK = obj.configure_button_box(xorVal);
+            
+            if ~buttonBoxOK
+               btState = warning('backtrace');
+               warning('backtrace', 'off');
+               warning('Button box might be incorrectly configured.') 
+               warning('backtrace', btState.state);
+            end
+
             obj.stimSize = 0;
             obj.status = sprintf('No stimulus loaded.');
             
@@ -828,6 +831,54 @@ classdef tdt < handle
     end
    
     methods(Access='private')
+        function buttonBoxOK = configure_button_box(obj, xorVal)    
+        % try auto-setting the button box xor value
+        % version added: 1.6
+        % last modified: 2016-04-21
+            buttonBoxOK = false;
+            if isempty(xorVal)
+                buttonPresses = obj.get_button_presses();
+                if length(buttonPresses) == 1 && isnan(buttonPresses(1))
+                    fprintf(1, 'xorVal autodetected successfully! (0)\n');
+                    buttonBoxOK = true;
+                elseif all(buttonPresses == buttonPresses(1))
+                    tryVal = buttonPresses(1);
+                    obj.RP.SetTagVal('xorVal', tryVal);
+                    obj.reset();
+                    pause(0.5);
+                    buttonPresses = obj.get_button_presses();
+                    if length(buttonPresses) == 1 && isnan(buttonPresses(1))
+                        fprintf(1, 'xorVal autodetected successfully! ');
+                        fprintf(1, '(%d)\n', tryVal);
+                        buttonBoxOK = true;
+                    else
+                        fprintf(1, 'WARNING: ');
+                        fprintf(1, 'xorVal was set to %d, ', tryVal);
+                        fprintf(1, 'but that does not seem to be working.\n');
+                        fprintf(1, 'Button box may not function correctly.\n');
+                    end
+                else
+                    fprintf(1, 'WARNING: ');
+                    fprintf(1, 'Could not auto-configure xorVal.\n');
+                    fprintf(1, 'Button box may not function correctly.\n');
+                end
+            else
+                obj.RP.SetTagVal('xorVal', xorVal);
+                pause(0.01);
+                obj.reset()
+                pause(0.5);
+                buttonPresses = obj.get_button_presses();
+                if length(buttonPresses) ~= 1 || ~isnan(buttonPresses(1));
+                    fprintf(1, 'WARNING: ');
+                    fprintf(1, ['xorVal is likely incorrect; '...
+                                'try setting it to [] to autoconfigure.\n']);
+                    fprintf(1, 'Button box might not function correctly.\n');
+                else
+                    buttonBoxOK = true;
+                end
+            end
+        end
+        
         function reset_buffers(obj, clearBuffer)
         % tdt.reset_buffers(clearBuffer)
         %
@@ -886,7 +937,6 @@ classdef tdt < handle
             close(obj.f1);
             close(obj.hiddenFigure);
             obj.status = sprintf('Not connected.');
-        end
-        
+        end   
     end
 end
