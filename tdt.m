@@ -49,7 +49,8 @@ classdef tdt < handle
 %   button 1 is pressed, it will report "14" (sum(2.^[1, 2, 3])). To
 %   "invert" the logic and store the correct values, set xor to 15. You may
 %   have to play with this value depending on the configuration of your
-%   digital inputs to the TDT. Defaults to 0.
+%   digital inputs to the TDT. If not specificed, autoconfiguration is
+%   attempted.
 %
 %   figNum: by default, creates the ActiveX figure as figure number 99999;
 %   specify an integer argument if for some reason you want another value.
