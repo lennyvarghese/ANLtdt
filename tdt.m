@@ -361,7 +361,6 @@ classdef tdt < handle
                 error('TDT connection error. Try rebooting the TDT.');
             end
             
-
             % display some status information to the user
             fprintf('Channel 1, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel1Scale, obj.channel1Scale);
@@ -519,7 +518,6 @@ classdef tdt < handle
             obj.RP.SetTagVal('stimSize', size(audioData, 1)+2); 
             obj.stimSize = size(audioData, 1) + 1;
 
-
             % note: 0 padding below appears to eliminate the clicking noise
             % when buffers are written to or accessed - LV 2016-02-08
             if ~strcmpi(obj.paradigmType, 'playback_2channel_16bit')
@@ -565,6 +563,7 @@ classdef tdt < handle
             fprintf('Stimulus loaded.\n')
         end
 
+        
         function play(obj, stopAfter)
         % tdt.play(stopAfter)
         %
@@ -598,6 +597,7 @@ classdef tdt < handle
                                  stopAfter);
         end
 
+        
         function pause(obj)
         % tdt.pause()
         %
@@ -614,6 +614,7 @@ classdef tdt < handle
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
        
+        
         function play_blocking(obj, stopAfter, debugMode)
         % tdt.play_blocking(stopAfter)
         %
@@ -708,6 +709,7 @@ classdef tdt < handle
             fprintf('...done.\n')
         end
 
+        
         function rewind(obj)
         % tdt.rewind()
         %
@@ -722,6 +724,7 @@ classdef tdt < handle
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
        
+        
         function reset(obj)
         % tdt.reset()
         %
@@ -734,6 +737,7 @@ classdef tdt < handle
             currentSample = obj.get_current_sample();
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
+        
         
         function send_event(obj, eventVal)
         % tdt.send_event(eventVal)
@@ -750,6 +754,7 @@ classdef tdt < handle
             pause(0.01);
             obj.RP.SoftTrg(4);
         end
+        
         
         function [pressVals, pressSamples] = get_button_presses(obj)
            % [pressVals, pressSamples] = tdt.get_button_presses()
@@ -791,6 +796,7 @@ classdef tdt < handle
             
         end
         
+        
         function [currentSample1, trigBufSample1] = ...
                 get_current_sample(obj, checks)
         % [audioIdx, triggerIdx] = tdt.get_current_sample(checks)
@@ -831,11 +837,14 @@ classdef tdt < handle
         end
     end
    
+    
     methods(Access='private')
         function buttonBoxOK = configure_button_box(obj, xorVal)    
-        % try auto-setting the button box xor value
+        % try auto-setting the button box xor value; if incorrectly
+        % configured, the button box buffer will be receiving meaningless
+        % input
         % version added: 1.6
-        % last modified: 2016-04-21
+        % last modified: 2016-04-21 LV, lennyv_at_bu_dot_edu
             buttonBoxOK = false;
             if isempty(xorVal)
                 buttonPresses = obj.get_button_presses();
@@ -880,6 +889,7 @@ classdef tdt < handle
             end
         end
         
+        
         function reset_buffers(obj, clearBuffer)
         % tdt.reset_buffers(clearBuffer)
         %
@@ -922,6 +932,7 @@ classdef tdt < handle
             obj.status = sprintf('stopped at buffer index %d',...
                                  currentSample);
         end
+        
         
         function delete(obj)
         % tdt.delete()
