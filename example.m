@@ -3,34 +3,36 @@
 
 % set max/min on channels to 0.1 V; no background noise, default trigger
 % durations (5 ms) and button hold durations (200 ms) 24 kHz sample rate
-myTDT = tdt('playback_1channel', 24, 0.1, [], []);
+myTDT = tdt('playback_1channel', 24, 0.1);
 pause(1)
 clear myTDT
 
 % set channel scaling to 0.2V in left channel, 0.3V in right channel; set
 % trigger durations to 10 ms, and button hold duration to 100 ms; sample rate 
 % 48Khz
-myTDT = tdt('playback_1channel', 48, [0.2, 0.3], 0.01, 0.1);
+myTDT = tdt('playback_1channel', 48, [0.2, 0.3], 'triggerDuration', 0.01, ...
+    'buttonHoldDuration', 0.1);
 pause(1);
 clear myTDT
 
-% set both channels' scaling to 1.1 V, 1 ms trigger durations, turn on continuous
-% wait 1 second, then clear the object.
-% use the "16bit" version of the 2-channel circuit
-myTDT = tdt('playback_2channel_16bit', 48, [1.1, 1.1], 1E-3);
+% set both channels' scaling to 1.1 V, 1 ms trigger durations, turn on
+% continuous wait 1 second, then clear the object. use the "16bit" version
+% of the 2-channel circuit
+myTDT = tdt('playback_2channel_16bit', 48, [1.1, 1.1],...
+            'triggerDuration', 1E-3);
 pause(1);
 clear myTDT
 
-% set channel scaling to 1.1V in channel 1 and 1.0V in channel 2, 1 ms trigger
-% durations 
-myTDT = tdt('playback_2channel', 48, [1.1, 1], 1E-3);
+% set channel scaling to 1.1V in channel 1 and 1.0V in channel 2, 100 ms
+% button hold duration
+myTDT = tdt('playback_2channel', 48, [1.1, 1], 'buttonHoldDuration', 1E-3);
 pause(1);
 clear myTDT
 
 
 %% Stimulus creation and transfer to TDT
 clear myTDT;
-myTDT = tdt('playback_2channel', 24, [1, 1], 1E-3);
+myTDT = tdt('playback_2channel', 24, [1, 1], 'triggerDuration', 1E-3);
 
 % create a stimulus
 t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
@@ -57,7 +59,7 @@ myTDT.play_blocking([], 1);
 % note: if this does not return NaN when no buttons were pressed, or if no
 % buttons are connected, then the xor value needs to be changed in the
 % object constructor call.
-[buttonPresses, buttonPressSamples] = myTDT.get_button_presses();
+[buttonPresses, buttonPressSamples] = myTDT.get_button_presses()
 myTDT.rewind();
 
 % play the first 10000 samples while blocking and stop, also with debug
@@ -94,7 +96,7 @@ clear myTDT;
 % paradigm settings)
 
 disp('Using 48.8 kHz, 32 bit data transfer')
-myTDT = tdt('playback_2channel', 48, [1, 1], 1E-3);
+myTDT = tdt('playback_2channel', 48, [1, 1]);
 % create a stimulus
 t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
 chan1Stim = sin(2*pi*1000*t);
@@ -107,7 +109,7 @@ toc
 clear myTDT
 
 disp('Using 48.8 kHz, 16 bit data transfer')
-myTDT = tdt('playback_2channel_16bit', 48, [1, 1], 1E-3);
+myTDT = tdt('playback_2channel_16bit', 48, [1, 1]);
 % create a stimulus
 t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
 chan1Stim = sin(2*pi*1000*t);
@@ -119,7 +121,7 @@ toc
 clear myTDT
 
 disp('Using 24.4 kHz, 32 bit data transfer')
-myTDT = tdt('playback_2channel', 24, [1, 1], 1E-3);
+myTDT = tdt('playback_2channel', 24, [1, 1]);
 % create a stimulus
 t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
 chan1Stim = sin(2*pi*1000*t);
@@ -131,7 +133,7 @@ toc
 clear myTDT
 
 disp('Using 24.4 kHz, 16 bit data transfer')
-myTDT = tdt('playback_2channel_16bit', 24, [1, 1], 1E-3);
+myTDT = tdt('playback_2channel_16bit', 24, [1, 1]);
 % create a stimulus
 t = 0:(1/myTDT.sampleRate):(10 - 1/myTDT.sampleRate);
 chan1Stim = sin(2*pi*1000*t);

@@ -1,8 +1,10 @@
 % ABR 5 level demo
+% updated for version 1.6
 
 % the scaling values here are voltages I determined to get a specified SPL for
 % the clicks being presented via the earphones I want to use
-myTdt = tdt('playback_2channel', 48, [1.6*db2mag(12), 1.65*db2mag(12)]);
+myTdt = tdt('playback_2channel', 48, [1.6*db2mag(12), 1.65*db2mag(12)], ...
+            'triggerDuration', 0.002);
 
 % need to check that the HB7 gain knob is at the right setting
 check = 'notok';

@@ -1,12 +1,17 @@
 classdef tdt < handle
-% tdtObject = tdt(paradigmType, sampleRate, scaling, trigDuration=0.005,
-%                 buttonHoldDuration=0.2, xorVal=0, figNum=99999)
+% ANL TDT interface code, v1.6 (2016-04-21)
+%
+% tdtObject = tdt(paradigmType, sampleRate, scaling, ...
+%                 'triggerDuration', 0.005, 'buttonHoldDuration', 0.2, ...
+%                 'xorVal', 0, 'figNum', 9999)
 %
 % Creates a new object to interact with the TDT RP2.1 or the TDT RZ6.
 %
 % Inputs:
 % ----------------------------------------------------------------------------
-%   paradigmType: string, with one of the following values:
+%   Required
+%   '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+%   paradigmType: character string, with one of the following values:
 %      'playback_1channel':
 %          one-channel stimuli up to 8.38E6 (RP2.1) or 1.67E7 (RZ6) samples
 %      'playback_2channel':
@@ -31,8 +36,10 @@ classdef tdt < handle
 %   "playback_1channel" and specify a 1-channel scaler. For diotic
 %   playback, use paradigmType = "playback_1channel" and specify a
 %   2-channel scaler.
-% 
-%   trigDuration: the duration, in seconds, that each event signal should
+%   
+%   Optional Keyword Arguments (new in v1.6, replaces positional arguments)
+%   '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+%   triggerDuration: the duration, in seconds, that each event signal should
 %   last. Default: 5E-3 s
 %
 %   buttonHoldDuration: the duration, in s, that is required before a
@@ -85,7 +92,7 @@ classdef tdt < handle
 %       paradigmType: the selected paradigm type used to generate this
 %       object
 %
-%       trigDuration: the duration of a digital event sent via the digital
+%       triggerDuration: the duration of a digital event sent via the digital
 %       out port on the RP2.1
 %
 %       buttonHoldDuration: the button hold duration (see description of
@@ -115,12 +122,18 @@ classdef tdt < handle
 %
 %       get_current_sample([consistencyCheck = true])
 %
-%  e.g.: >> myTDT = tdt('playback_1channel', 48, [1, 1]); >> help
-%  myTDT.get_button_presses ... >> help myTDT.play_blocking
+%     e.g.: 
+%       >> myTDT = tdt('playback_1channel', 48, [1, 1]); 
+%       >> help myTDT.get_button_presses 
+%       >> help myTDT.play_blocking
 %
-% See the example.m file to see more examples of intended/potential usage.
+%   See the example.m file to see more examples of intended/potential usage.
 % ----------------------------------------------------------------------------
-% Notes:
+% Release notes:
+%   As of v1.6, less frequently used arguments are now able to be specified
+%   using Matlab keyword arguments: 'triggerDuration', 'buttonHoldDuration', 
+%   'xorVal', and 'figNum'. These optional arguments are numeric, and
+%   default to the same values as in earlier versions.
 %
 %   TDT RZ6 support added as of v1.6 (2016-04-20). The setup for the RZ6
 %   assumes bytes A + C are set up as outputs, and byte B is set up as an
@@ -148,7 +161,7 @@ classdef tdt < handle
         status
         stimSize
         nChans
-        trigDuration
+        triggerDuration
         buttonHoldDuration
         paradigmType
     end
@@ -158,77 +171,18 @@ classdef tdt < handle
         f1
         hiddenFigure
         bufferSize
+        xorVal
     end
 
     methods
         function obj = tdt(paradigmType, requestedSampleRate, scaling, ...
-                           trigDuration, buttonHoldDuration, xorVal, figNum)
-          
-            %%% sample rate check
-            if nargin < 2
-                error('Desired sample rate must be specified.')
-            end
+                           varargin)
+                       
+            rateTag = obj.parse_inputs(paradigmType, requestedSampleRate,...
+                                       scaling, varargin{:});
 
-            if 97 == requestedSampleRate
-                rateTag = 4;
-            elseif 48 == requestedSampleRate 
-                rateTag = 3;
-            elseif 24 == requestedSampleRate
-                rateTag = 2;
-            elseif 12 == requestedSampleRate 
-                rateTag = 1;
-            else
-                error('invalid sample rate specified (must be 97, 48, 24, 12)')
-            end
-
-            %%% voltage scaling
-            if nargin < 3 || any(abs(scaling) > 10)
-                error('Scaling must be specified and be within +/-10 V.')
-            end
-           
-            % by default, set scaling equal on both channels (2 channel), or
-            % use monaural playback
-            if length(scaling) < 2
-                if strcmpi(paradigmType, 'playback_2channel')
-                    scaling(2) = scaling(1);
-                else
-                    scaling(2) = 0;
-                end
-            end
-
-            if nargin < 4 || isempty(trigDuration)
-               trigDuration = 5E-3; % s
-            end
-            if trigDuration <= 0
-                error('trigDuration must be positive')
-            end
-            
-            if nargin < 5 || isempty(buttonHoldDuration)
-               buttonHoldDuration = 200E-3; % s
-            end
-            if buttonHoldDuration <= 0
-                error('buttonHoldDuration must be positive')
-            end
-            
-            if nargin < 6 || isempty(xorVal)
-               xorVal = []; 
-            end
-
-            if nargin < 7 || isempty(figNum)
-                figNum = 99999;
-            end
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            
-            % Start ActiveX controls and hides the figure at the start of
-            % each block
-            obj.f1 = figure(figNum);
-            set(obj.f1,'Position', [5 5 30 30], 'Visible', 'off');
-            obj.RP = actxcontrol('RPco.x', [5 5 30 30], obj.f1);
-            % open up a new figure and hide it, so that the first plot command
-            % doesn't screw things up
-            obj.hiddenFigure = figure(figNum + 1);
-            set(gcf, 'Visible', 'off');
-            
+
             % try connecting to an RZ6 via Optibit first...if that fails,
             % then fall back to RP2. As per activeX manual, 'GB' is correct
             % for optibit interfaces.
@@ -259,7 +213,6 @@ classdef tdt < handle
                     end
                 end
             end
-            
             if ~useRZ6 && rateTag == 4
                 error(['Cannot use sample rate setting 97 with RP2.1.', ...
                        'Use 48, 24, or 12 instead.']);
@@ -270,33 +223,33 @@ classdef tdt < handle
             %Loads the appropriate circuit, with a quick binary check to ensure
             %file versions are correct
             if useRZ6
-                if strcmpi(paradigmType, 'playback_1channel')
+                if strcmpi(obj.paradigmType, 'playback_1channel')
                     obj.nChans = 1;
                     obj.bufferSize = 1.67E7;
-                elseif strcmpi(paradigmType, 'playback_2channel')
+                elseif strcmpi(obj.paradigmType, 'playback_2channel')
                     obj.nChans = 2;
                     obj.bufferSize = 8.38E6;
-                elseif strcmpi(paradigmType, 'playback_2channel_16bit')
+                elseif strcmpi(obj.paradigmType, 'playback_2channel_16bit')
                     obj.nChans = 2;
                     obj.bufferSize = 1.67E7;
                 else
                     error('paradigm type is currently unsupported.')
                 end
-                circuitName = ['bin/' paradigmType '_button_rz6'];
+                circuitName = ['bin/' obj.paradigmType '_button_rz6'];
             else
-                if strcmpi(paradigmType, 'playback_1channel')
+                if strcmpi(obj.paradigmType, 'playback_1channel')
                     obj.nChans = 1;
                     obj.bufferSize = 8.38E6;
-                elseif strcmpi(paradigmType, 'playback_2channel')
+                elseif strcmpi(obj.paradigmType, 'playback_2channel')
                     obj.nChans = 2;
                     obj.bufferSize = 4.19E6;
-                elseif strcmpi(paradigmType, 'playback_2channel_16bit')
+                elseif strcmpi(obj.paradigmType, 'playback_2channel_16bit')
                     obj.nChans = 2;
                     obj.bufferSize = 8.38E6;
                 else
                     error('paradigm type is currently unsupported.')
                 end
-                circuitName = ['bin/' paradigmType '_button'];
+                circuitName = ['bin/' obj.paradigmType '_button'];
             end
             
             load([circuitName '.mat'], 'binInfo')
@@ -307,27 +260,16 @@ classdef tdt < handle
                 error('Version mismatch between .m and .rcx files.')
             end
             
-            obj.paradigmType = paradigmType;
+            % load circuit into TDT memory
             obj.RP.LoadCOFsf([circuitName '.rcx'], rateTag);
 
-            % store some relevant info in the object itself
-
-            % sample rate
-            obj.sampleRate = obj.RP.GetSFreq();
-            
             % trigger duration (fixed)
-            obj.trigDuration = trigDuration;
             obj.RP.SetTagVal('triggerDuration', ...
-                             1000 * obj.trigDuration);
-                         
+                             1000 * obj.triggerDuration);
             % button hold time (fixed)
-            obj.buttonHoldDuration = buttonHoldDuration;
             obj.RP.SetTagVal('buttonHoldDuration', ...
                              1000 * obj.buttonHoldDuration);
 
-            % scaling factors
-            obj.channel1Scale = single(scaling(1));
-            obj.channel2Scale = single(scaling(2));
             if useRZ6
                 % for the RZ6, use the full scale of 10V, and bring it back
                 % into range using the programmable attenuator. The
@@ -345,7 +287,6 @@ classdef tdt < handle
                 obj.RP.SetTagVal('chan2Scaler', obj.channel2Scale);
             end
             
-            obj.RP.SetTagVal('chan2Scaler', obj.channel2Scale);
             % zero tag the relevant buffers
             obj.RP.ZeroTag('audioChannel1');
             obj.RP.ZeroTag('audioChannel2');
@@ -367,8 +308,12 @@ classdef tdt < handle
             fprintf('Channel 2, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel2Scale, obj.channel2Scale);
              
-            buttonBoxOK = obj.configure_button_box(xorVal);
+            % get and store sample rate once the circut is loaded and
+            % running
+            obj.sampleRate = obj.RP.GetSFreq();
             
+            % validate the xorVal
+            buttonBoxOK = obj.configure_button_box();
             if ~buttonBoxOK
                btState = warning('backtrace');
                warning('backtrace', 'off');
@@ -378,7 +323,6 @@ classdef tdt < handle
 
             obj.stimSize = 0;
             obj.status = sprintf('No stimulus loaded.');
-            
             if useRZ6
                 obj.deviceType = 'RZ6';
             else
@@ -839,14 +783,14 @@ classdef tdt < handle
    
     
     methods(Access='private')
-        function buttonBoxOK = configure_button_box(obj, xorVal)    
+        function buttonBoxOK = configure_button_box(obj)    
         % try auto-setting the button box xor value; if incorrectly
         % configured, the button box buffer will be receiving meaningless
         % input
         % version added: 1.6
         % last modified: 2016-04-21 LV, lennyv_at_bu_dot_edu
             buttonBoxOK = false;
-            if isempty(xorVal)
+            if isempty(obj.xorVal)
                 buttonPresses = obj.get_button_presses();
                 if length(buttonPresses) == 1 && isnan(buttonPresses(1))
                     fprintf(1, 'xorVal autodetected successfully! (0)\n');
@@ -861,6 +805,7 @@ classdef tdt < handle
                         fprintf(1, 'xorVal autodetected successfully! ');
                         fprintf(1, '(%d)\n', tryVal);
                         buttonBoxOK = true;
+                        obj.xorVal = tryVal;
                     else
                         fprintf(1, 'WARNING: ');
                         fprintf(1, 'xorVal was set to %d, ', tryVal);
@@ -873,7 +818,7 @@ classdef tdt < handle
                     fprintf(1, 'Button box may not function correctly.\n');
                 end
             else
-                obj.RP.SetTagVal('xorVal', xorVal);
+                obj.RP.SetTagVal('xorVal', obj.xorVal);
                 pause(0.01);
                 obj.reset()
                 pause(0.5);
@@ -949,6 +894,79 @@ classdef tdt < handle
             close(obj.f1);
             close(obj.hiddenFigure);
             obj.status = sprintf('Not connected.');
-        end   
+        end
+        
+        
+        function rateTag = parse_inputs(obj, paradigmType, ...
+                                        requestedSampleRate, scaling, varargin)
+            p = inputParser();
+            addRequired(p, 'paradigmType', @ischar);
+            addRequired(p, 'requestedSampleRate', @isnumeric);
+            addRequired(p, 'scaling', @isnumeric);
+            addParameter(p, 'triggerDuration', 0.005, @isnumeric);
+            addParameter(p, 'buttonHoldDuration', 0.2, @isnumeric);
+            addParameter(p, 'xorVal', [], @isnumeric);
+            addParameter(p, 'figNum', 9999, @isnumeric);
+            
+            p.parse(paradigmType, requestedSampleRate, scaling, varargin{:})
+    
+            inputs = p.Results;
+            
+            %% input checks
+            
+            % by default, set scaling equal on both channels (2 channel), or
+            % use monaural playback
+            if length(inputs.scaling) < 2
+                if strcmpi(inputs.paradigmType, 'playback_2channel')
+                    inputs.scaling(2) = inputs.scaling(1);
+                else
+                    inputs.scaling(2) = 0;
+                end
+            end
+            
+            %%% voltage scaling
+            if any(abs(inputs.scaling) > 10)
+                error('Scaling must be specified and be within +/-10 V.')
+            end
+            
+            if 97 == inputs.requestedSampleRate
+                rateTag = 4;
+            elseif 48 == inputs.requestedSampleRate 
+                rateTag = 3;
+            elseif 24 == inputs.requestedSampleRate
+                rateTag = 2;
+            elseif 12 == inputs.requestedSampleRate 
+                rateTag = 1;
+            else
+                error('invalid sample rate specified (must be 97, 48, 24, 12)')
+            end
+            
+            if inputs.buttonHoldDuration <= 0
+                error('buttonHoldDuration must be positive')
+            end
+            
+            if inputs.triggerDuration <= 0
+                error('triggerDuration must be positive')
+            end
+            
+            % scaling factors
+            obj.channel1Scale = single(inputs.scaling(1));
+            obj.channel2Scale = single(inputs.scaling(2));
+            
+            obj.paradigmType = inputs.paradigmType;
+            obj.buttonHoldDuration = inputs.buttonHoldDuration;
+            obj.triggerDuration = inputs.triggerDuration;
+            obj.xorVal = inputs.xorVal;
+            
+            % Start ActiveX controls and hides the figure at the start of
+            % each block
+            obj.f1 = figure(inputs.figNum);
+            set(obj.f1,'Position', [5 5 30 30], 'Visible', 'off');
+            obj.RP = actxcontrol('RPco.x', [5 5 30 30], obj.f1);
+            % open up a new figure and hide it, so that the first plot command
+            % doesn't screw things up
+            obj.hiddenFigure = figure(inputs.figNum + 1);
+            set(gcf, 'Visible', 'off');
+        end
     end
 end

@@ -64,4 +64,4 @@ v1.4: Fixed bug which prevented "normally-closed" button box inputs from registe
 
 v1.5: Added options to allow for speeded TDT communication by using 16-bit stimuli 
 
-v1.6: Added RZ6 support.
+v1.6: Added RZ6 support, keyword arguments, and button box input autoconfiguration.
