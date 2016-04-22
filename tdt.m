@@ -260,13 +260,13 @@ classdef tdt < handle
                 circuitName = ['bin/' obj.paradigmType '_button'];
             end
             
-%             load([circuitName '.mat'], 'binInfo')
-%             fileID = fopen([circuitName '.rcx']);
-%             temp = fread(fileID, Inf, 'int32=>int32');
-%             fclose(fileID);
-%             if any(size(temp) ~= size(binInfo)) || any(temp ~= binInfo)
-%                 error('Version mismatch between .m and .rcx files.')
-%             end
+            load([circuitName '.mat'], 'binInfo')
+            fileID = fopen([circuitName '.rcx']);
+            temp = fread(fileID, Inf, 'int32=>int32');
+            fclose(fileID);
+            if any(size(temp) ~= size(binInfo)) || any(temp ~= binInfo)
+                error('Version mismatch between .m and .rcx files.')
+            end
             
             % load circuit into TDT memory
             obj.RP.LoadCOFsf([circuitName '.rcx'], rateTag);
