@@ -37,7 +37,7 @@ classdef tdt < handle
 %   playback, use paradigmType = "playback_1channel" and specify a
 %   2-channel scaler.
 %   
-%   Optional Keyword Arguments (new in v1.6, replaces positional arguments)
+%   Optional Keyword Arguments (new in v1.6)
 %   '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 %   triggerDuration: the duration, in seconds, that each event signal should
 %   last. Default: 5E-3 s
@@ -64,6 +64,13 @@ classdef tdt < handle
 %   There is no good reason to change this setting, unless you have a
 %   figure number 99999 used for something else in your code (or this value
 %   conflicts with some other dummy figure in another software package).
+%   
+%   Specifying positional arguments is still supported for the sake of
+%   backwards compatibility with existing experiments using earlier
+%   versions of this code. Arguments 4-7 should then be specified in the
+%   order: triggerDuration (seconds), buttonHoldDuration (seconds), xorVal
+%   (int), figNum (int).
+%
 %
 % Outputs:
 % ----------------------------------------------------------------------------
@@ -133,7 +140,8 @@ classdef tdt < handle
 %   As of v1.6, less frequently used arguments are now able to be specified
 %   using Matlab keyword arguments: 'triggerDuration', 'buttonHoldDuration', 
 %   'xorVal', and 'figNum'. These optional arguments are numeric, and
-%   default to the same values as in earlier versions.
+%   default to the same values as in earlier versions. Positional arguments
+%   are still supported.
 %
 %   TDT RZ6 support added as of v1.6 (2016-04-20). The setup for the RZ6
 %   assumes bytes A + C are set up as outputs, and byte B is set up as an
@@ -899,18 +907,69 @@ classdef tdt < handle
         
         function rateTag = parse_inputs(obj, paradigmType, ...
                                         requestedSampleRate, scaling, varargin)
-            p = inputParser();
-            addRequired(p, 'paradigmType', @ischar);
-            addRequired(p, 'requestedSampleRate', @isnumeric);
-            addRequired(p, 'scaling', @isnumeric);
-            addParameter(p, 'triggerDuration', 0.005, @isnumeric);
-            addParameter(p, 'buttonHoldDuration', 0.2, @isnumeric);
-            addParameter(p, 'xorVal', [], @isnumeric);
-            addParameter(p, 'figNum', 9999, @isnumeric);
-            
-            p.parse(paradigmType, requestedSampleRate, scaling, varargin{:})
+        % helper function to help setup the constructor
+        % version added: 1.6
+        % last modified: 2016-04-21 LV, lennyv_at_bu_dot_edu
+        % support old and new style parsing and defaults
+            if any(cellfun(@ischar, varargin)) || length(varargin) == 0 % kwargs
+                p = inputParser();
+                addRequired(p, 'paradigmType', @ischar);
+                addRequired(p, 'requestedSampleRate', @isnumeric);
+                addRequired(p, 'scaling', @isnumeric);
+                addOptional(p, 'triggerDuration', 0.005, @isnumeric);
+                addOptional(p, 'buttonHoldDuration', 0.2, @isnumeric);
+                addOptional(p, 'xorVal', [], @isnumeric);
+                addOptional(p, 'figNum', 9999, @isnumeric);
+                
+                p.parse(paradigmType, requestedSampleRate, scaling, varargin{:})
     
-            inputs = p.Results;
+                inputs = p.Results;
+            else % all numeric, like old style
+                btState = warning('backtrace');
+                warning('backtrace', 'off');
+                warning('Deprecation warning!');
+                warning('Use keyword argument pairs in future releases (see help).') 
+                warning('backtrace', btState.state);
+
+                input.paradigmType = paradigmType;
+                input.requestedSampleRate = requestedSampleRate;
+                input.scaling = scaling;
+                if length(varargin) > 0
+                    input.triggerDuration = varargin{1};
+                else
+                    input.triggerDuration = [];
+                end
+                if isempty(input.triggerDuration)
+                    input.triggerDuration = [];
+                end
+
+                if length(varargin) > 1
+                    input.buttonHoldDuration = varargin{2};
+                else
+                    input.buttonHoldDuration = [];
+                end
+                if isempty(input.buttonHoldDuration)
+                    input.buttonHoldDuration = 0.2;
+                end
+                
+                if length(varargin) > 3
+                    input.xorVal = varargin{3};
+                else
+                    input.xorVal = [];
+                end
+                if isempty(input.xorVal)
+                    input.xorVal = 0;
+                end
+                
+                if length(varargin) > 4
+                    input.figNum = varargin{4};
+                else
+                    input.figNum = [];
+                end
+                if isempty(input.figNum)
+                    input.figNum = 9999; 
+                end
+            end
             
             %% input checks
             
