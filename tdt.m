@@ -617,34 +617,17 @@ classdef tdt < handle
             obj.RP.SoftTrg(1);
             pause(0.01)
             try
-                currentSample = obj.RP.GetTagVal('chan1BufIdx');
-                if isempty(stopAfter)
-                    if debugMode
-                        fprintf(1, '    Current sample: %08d\n', ....
+                if debugMode
+                    fprintf(1, '    Current sample: %08d\n', ....
+                            currentSample);
+                end
+                while currentSample > 0 && currentSample <= stopAfterSample
+                    currentSample = obj.RP.GetTagVal('chan1BufIdx');
+                    if debugMode && currentSample
+                        fprintf(1, '\b\b\b\b\b\b\b\b\b%08d\n', ...
                                 currentSample);
                     end
-                    
-                    while currentSample > 0 
-                        currentSample = obj.RP.GetTagVal('chan1BufIdx');
-                        if debugMode && currentSample
-                                fprintf(1, '\b\b\b\b\b\b\b\b\b%08d\n', ...
-                                        currentSample);
-                        end
-                        pause(0.1);
-                    end
-                else
-                    if debugMode
-                        fprintf(1, '    Current sample: %08d\n', ....
-                                currentSample);
-                    end
-                    while currentSample <= stopAfterSample
-                        currentSample = obj.RP.GetTagVal('chan1BufIdx');
-                        if debugMode && currentSample
-                            fprintf(1, '\b\b\b\b\b\b\b\b\b%08d\n', ...
-                                    currentSample);
-                        end
-                        pause(0.1);
-                    end
+                    pause(0.1);
                 end
                 fprintf(1, '    Sample %d reached\n', stopAfterSample);
             catch ME
@@ -652,7 +635,6 @@ classdef tdt < handle
                 fprintf(['\n' obj.status]);
                 throw(ME);
             end
-            currentSample = obj.get_current_sample();
             if ~currentSample
                 fprintf(1, ['    All samples played; ', ...
                             'buffer index reset to 0.\n']);
