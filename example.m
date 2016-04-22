@@ -17,9 +17,8 @@ clear myTDT
 
 % set both channels' scaling to 1.1 V, 1 ms trigger durations, turn on
 % continuous wait 1 second, then clear the object. use the "16bit" version
-% of the 2-channel circuit
-myTDT = tdt('playback_2channel_16bit', 48, [1.1, 1.1],...
-            'triggerDuration', 1E-3);
+% of the 2-channel circuit; use the old style positional arguments.
+myTDT = tdt('playback_2channel_16bit', 48, [1.1, 1.1], 1E-3, [], []);
 pause(1);
 clear myTDT
 

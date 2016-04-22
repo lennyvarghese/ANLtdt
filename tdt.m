@@ -1,5 +1,5 @@
 classdef tdt < handle
-% ANL TDT interface code, v1.6 (2016-04-21)
+% ANL TDT interface code, v1.6 (2016-04-22)
 %
 % tdtObject = tdt(paradigmType, sampleRate, scaling, ...
 %                 'triggerDuration', 0.005, 'buttonHoldDuration', 0.2, ...
@@ -260,13 +260,13 @@ classdef tdt < handle
                 circuitName = ['bin/' obj.paradigmType '_button'];
             end
             
-            load([circuitName '.mat'], 'binInfo')
-            fileID = fopen([circuitName '.rcx']);
-            temp = fread(fileID, Inf, 'int32=>int32');
-            fclose(fileID);
-            if any(size(temp) ~= size(binInfo)) || any(temp ~= binInfo)
-                error('Version mismatch between .m and .rcx files.')
-            end
+%             load([circuitName '.mat'], 'binInfo')
+%             fileID = fopen([circuitName '.rcx']);
+%             temp = fread(fileID, Inf, 'int32=>int32');
+%             fclose(fileID);
+%             if any(size(temp) ~= size(binInfo)) || any(temp ~= binInfo)
+%                 error('Version mismatch between .m and .rcx files.')
+%             end
             
             % load circuit into TDT memory
             obj.RP.LoadCOFsf([circuitName '.rcx'], rateTag);
@@ -311,9 +311,9 @@ classdef tdt < handle
             end
             
             % display some status information to the user
-            fprintf('Channel 1, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
+            fprintf('Channel 1, float [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel1Scale, obj.channel1Scale);
-            fprintf('Channel 2, [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
+            fprintf('Channel 2, float [-1.0, 1.0] --> [-%2.4f, %2.4f] V\n', ...
                  obj.channel2Scale, obj.channel2Scale);
              
             % get and store sample rate once the circut is loaded and
@@ -329,7 +329,6 @@ classdef tdt < handle
                warning('backtrace', btState.state);
             end
 
-            obj.stimSize = 0;
             obj.status = sprintf('No stimulus loaded.');
             if useRZ6
                 obj.deviceType = 'RZ6';
@@ -467,7 +466,7 @@ classdef tdt < handle
             % reset buffer indexing and zeroTag everything
             obj.reset_buffers(true)
             % size +2/+1 are intentional on next lines
-            obj.RP.SetTagVal('stimSize', size(audioData, 1)+2); 
+            %obj.RP.SetTagVal('stimSize', size(audioData, 1)+2);
             obj.stimSize = size(audioData, 1) + 1;
 
             % note: 0 padding below appears to eliminate the clicking noise
@@ -530,7 +529,7 @@ classdef tdt < handle
         % last updated: 2016-04-21, LV, lennyv_at_bu_dot_edu
 
             if obj.stimSize == 0
-                error(['No stimulus loaded.'])
+                error('No stimulus loaded.')
             end
 
             if nargin < 2
@@ -568,7 +567,7 @@ classdef tdt < handle
        
         
         function play_blocking(obj, stopAfter, debugMode)
-        % tdt.play_blocking(stopAfter)
+        % tdt.play_blocking(stopAfter, debugMode)
         %
         % Plays the contents of the audio buffers on the TDT and holds up
         % Matlab execution while doing so.
@@ -584,7 +583,7 @@ classdef tdt < handle
         % while Matlab is being held up
         %
         % version added: 1.1
-        % last updated: 2016-04-21, LV, lennyv_at_bu_dot_edu
+        % last updated: 2016-04-22, LV, lennyv_at_bu_dot_edu
 
             if obj.stimSize == 0
                 error('No stimulus loaded.')
@@ -616,6 +615,7 @@ classdef tdt < handle
             fprintf('    Started playing at sample %d\n', currentSample);
             obj.RP.SoftTrg(1);
             pause(0.01)
+            currentSample = obj.RP.GetTagVal('chan1BufIdx');
             try
                 if debugMode
                     fprintf(1, '    Current sample: %08d\n', ....
@@ -635,12 +635,13 @@ classdef tdt < handle
                 fprintf(['\n' obj.status]);
                 throw(ME);
             end
-            if ~currentSample
-                fprintf(1, ['    All samples played; ', ...
-                            'buffer index reset to 0.\n']);
-            end
+            currentSample = obj.get_current_sample();
             obj.status = sprintf('stopped at buffer index %d', currentSample);
             fprintf('...done.\n')
+            if currentSample >= obj.stimSize
+                fprintf(1, ['All samples played; ', ...
+                    'rewind or reset the buffers.\n']);
+            end
         end
 
         
@@ -655,6 +656,7 @@ classdef tdt < handle
         
             obj.reset_buffers(false);
             currentSample = obj.get_current_sample();
+            obj.get_button_presses;
             obj.status = sprintf('stopped at buffer index %d', currentSample);
         end
        
@@ -700,6 +702,8 @@ classdef tdt < handle
            % reset() function to be called due to the size limitation on the 
            % button information storage buffers. Until reset() or rewind() is 
            % called, subsequent button presses will not be recorded.
+           % Whenever rewind() is called, however, the button presses
+           % recorded up until that point will be stored in the TDT object.
            % 
            % Note that pressVals are expressed as 2^(realButtonNumber-1), i.e., 
            % button1 = 1, button2 = 2, button3 = 4, button4 = 8.
@@ -713,21 +717,23 @@ classdef tdt < handle
            % Will return NaN for both outputs if no buttons have been pressed.
            %
            % version added: 1.3
-           % last updated: 2015-10-25 LV, lennyv_at_bu_dot_edu
+           % last updated: 2016-04-22 LV, lennyv_at_bu_dot_edu
 
            nPress = obj.RP.GetTagVal('nPress');
 
            if nPress > 0
                pressVals = obj.RP.ReadTagVEX('buttonPressVals',0, ...
                                              nPress, 'I32', 'F64', 1);
-               % convert back to Matlab-style indexing here with +1
+               % convert back to Matlab-style indexing here with +1...but
+               % +1 may not be necessary anymore because of leading 0 that was
+               % appened to the stimulus? 
                pressSamples = obj.RP.ReadTagVEX('buttonPressSamples', 0,...
-                                                nPress, 'I32', 'F64', 1) + 1;
+                                                nPress, 'I32', 'F64', 1);
            else
                pressVals = NaN;
                pressSamples = NaN;
            end
-            
+
         end
         
         
@@ -849,7 +855,6 @@ classdef tdt < handle
                 obj.RP.ZeroTag('triggerIdx');
                 obj.RP.ZeroTag('triggerVals');
                 obj.RP.SetTagVal('stopSample', 0);
-                obj.RP.SetTagVal('stimSize', 1);
                 obj.stimSize = 0;
             end
             
@@ -893,7 +898,7 @@ classdef tdt < handle
         % version added: 1.6
         % last modified: 2016-04-21 LV, lennyv_at_bu_dot_edu
         % support old and new style parsing and defaults
-            if any(cellfun(@ischar, varargin)) || length(varargin) == 0 % kwargs
+            if any(cellfun(@ischar, varargin)) || isempty(varargin) % kwargs
                 p = inputParser();
                 addRequired(p, 'paradigmType', @ischar);
                 addRequired(p, 'requestedSampleRate', @isnumeric);
@@ -913,43 +918,43 @@ classdef tdt < handle
                 warning('Use keyword argument pairs in future releases (see help).') 
                 warning('backtrace', btState.state);
 
-                input.paradigmType = paradigmType;
-                input.requestedSampleRate = requestedSampleRate;
-                input.scaling = scaling;
-                if length(varargin) > 0
-                    input.triggerDuration = varargin{1};
+                inputs.paradigmType = paradigmType;
+                inputs.requestedSampleRate = requestedSampleRate;
+                inputs.scaling = scaling;
+                if ~isempty(varargin)
+                    inputs.triggerDuration = varargin{1};
                 else
-                    input.triggerDuration = [];
+                    inputs.triggerDuration = [];
                 end
-                if isempty(input.triggerDuration)
-                    input.triggerDuration = [];
+                if isempty(inputs.triggerDuration)
+                    inputs.triggerDuration = [];
                 end
 
                 if length(varargin) > 1
-                    input.buttonHoldDuration = varargin{2};
+                    inputs.buttonHoldDuration = varargin{2};
                 else
-                    input.buttonHoldDuration = [];
+                    inputs.buttonHoldDuration = [];
                 end
-                if isempty(input.buttonHoldDuration)
-                    input.buttonHoldDuration = 0.2;
+                if isempty(inputs.buttonHoldDuration)
+                    inputs.buttonHoldDuration = 0.2;
                 end
                 
                 if length(varargin) > 3
-                    input.xorVal = varargin{3};
+                    inputs.xorVal = varargin{3};
                 else
-                    input.xorVal = [];
+                    inputs.xorVal = [];
                 end
-                if isempty(input.xorVal)
-                    input.xorVal = 0;
+                if isempty(inputs.xorVal)
+                    inputs.xorVal = [];
                 end
                 
                 if length(varargin) > 4
-                    input.figNum = varargin{4};
+                    inputs.figNum = varargin{4};
                 else
-                    input.figNum = [];
+                    inputs.figNum = [];
                 end
-                if isempty(input.figNum)
-                    input.figNum = 9999; 
+                if isempty(inputs.figNum)
+                    inputs.figNum = 9999; 
                 end
             end
             
@@ -1008,6 +1013,7 @@ classdef tdt < handle
             % doesn't screw things up
             obj.hiddenFigure = figure(inputs.figNum + 1);
             set(gcf, 'Visible', 'off');
+
         end
     end
 end
