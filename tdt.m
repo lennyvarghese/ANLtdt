@@ -375,7 +375,7 @@ classdef tdt < handle
             if nargin < 3
                 triggerInfo = [];
             else
-                if isrow(triggerInfo)
+                if iscolumn(triggerInfo)
                     triggerInfo = triggerInfo';
                 end
                 if size(triggerInfo, 2) == 1
